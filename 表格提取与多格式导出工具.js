@@ -1,13 +1,14 @@
 // ==UserScript==
-// @name         表格提取与多格式导出工具
+// @name         表格提取与多格式导出工具 (增强版)
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  自动检测网页中的表格，支持多种格式导出，包括 JSON、Excel、CSV、Markdown、SQL 等。
+// @version      1.1
+// @description  自动检测网页中的表格，支持快捷键或按钮提取数据，提供多种格式导出。
 // @author       YourName
 // @match        *://*/*
 // @grant        GM_addStyle
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
+// @require      https://cdn.jsdelivr.net/npm/hotkeys-js/dist/hotkeys.min.js
 // ==/UserScript==
 
 (function () {
@@ -16,43 +17,73 @@
     // 添加样式
     GM_addStyle(`
         .table-extract-button {
-            position: absolute;
+            position: fixed;
             background-color: #4CAF50;
             color: white;
-            padding: 5px 10px;
-            border-radius: 3px;
+            padding: 10px;
+            border-radius: 5px;
             cursor: pointer;
             z-index: 9999;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-            font-size: 12px;
+            font-size: 14px;
             display: none;
+        }
+        #export-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 10000;
         }
     `);
 
+    let currentTable = null; // 当前选中的表格
+
     // 创建提取按钮
-    const createExtractButton = (table) => {
+    const createExtractButton = () => {
         const button = document.createElement("div");
-        button.textContent = "提取表格";
+        button.id = "table-extract-button";
+        button.textContent = "提取表格 (Alt+E)";
         button.classList.add("table-extract-button");
 
-        // 显示按钮
-        table.addEventListener("mouseenter", () => {
-            const rect = table.getBoundingClientRect();
-            button.style.top = `${rect.top + window.scrollY}px`;
-            button.style.left = `${rect.right + window.scrollX + 10}px`;
-            button.style.display = "block";
-            document.body.appendChild(button);
-        });
+        document.body.appendChild(button);
 
-        // 隐藏按钮
-        table.addEventListener("mouseleave", () => {
-            button.style.display = "none";
-        });
-
-        // 添加点击事件
+        // 按钮点击事件
         button.addEventListener("click", () => {
-            extractTableData(table);
+            if (currentTable) {
+                extractTableData(currentTable);
+            }
         });
+
+        return button;
+    };
+
+    const extractButton = createExtractButton();
+
+    // 确定表格并显示按钮
+    const detectAndActivateTable = (event) => {
+        const target = event.target;
+
+        // 查找最近的表格元素
+        const table = target.closest("table");
+        if (!table) return;
+
+        // 验证表格是否符合要求 (至少 2 行 2 列)
+        const rows = table.querySelectorAll("tr");
+        if (rows.length < 2 || !Array.from(rows).some((row) => row.children.length >= 2)) return;
+
+        // 更新当前表格
+        currentTable = table;
+
+        // 显示按钮
+        const rect = table.getBoundingClientRect();
+        extractButton.style.top = `${rect.top + window.scrollY}px`;
+        extractButton.style.left = `${rect.right + window.scrollX + 10}px`;
+        extractButton.style.display = "block";
     };
 
     // 提取表格数据
@@ -71,16 +102,6 @@
 
         const menu = document.createElement("div");
         menu.id = "export-menu";
-        menu.style.position = "fixed";
-        menu.style.top = "50%";
-        menu.style.left = "50%";
-        menu.style.transform = "translate(-50%, -50%)";
-        menu.style.backgroundColor = "#fff";
-        menu.style.padding = "20px";
-        menu.style.border = "1px solid #ccc";
-        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-        menu.style.zIndex = "10000";
-
         menu.innerHTML = `
             <h3 style="margin-top: 0;">选择导出格式：</h3>
             <button class="export-btn" data-format="json">JSON</button>
@@ -103,31 +124,35 @@
 
     // 导出数据
     const exportData = (data, format) => {
+        const filename = `table.${format}`;
         switch (format) {
             case "json":
-                saveFile(JSON.stringify(data, null, 2), "table.json", "application/json");
+                saveFile(JSON.stringify(data, null, 2), filename, "application/json");
                 break;
             case "csv":
-                saveFile(toCSV(data), "table.csv", "text/csv");
+                saveFile(toCSV(data), filename, "text/csv");
                 break;
             case "excel":
                 saveExcel(data, "table.xlsx");
                 break;
             case "markdown":
-                saveFile(toMarkdown(data), "table.md", "text/plain");
+                saveFile(toMarkdown(data), filename, "text/plain");
                 break;
             case "sql":
-                saveFile(toSQL(data), "table.sql", "text/plain");
+                saveFile(toSQL(data), filename, "text/plain");
                 break;
             case "html":
-                saveFile(toHTML(data), "table.html", "text/html");
+                saveFile(toHTML(data), filename, "text/html");
                 break;
             case "xml":
-                saveFile(toXML(data), "table.xml", "application/xml");
+                saveFile(toXML(data), filename, "application/xml");
                 break;
             default:
                 alert("不支持的格式！");
         }
+
+        // 关闭导出菜单
+        document.getElementById("export-menu").remove();
     };
 
     // 转换为 CSV 格式
@@ -185,16 +210,16 @@
         XLSX.writeFile(workbook, filename);
     };
 
-    // 自动检测表格并添加提取按钮
-    const detectTables = () => {
-        document.querySelectorAll("table").forEach((table) => {
-            const rows = table.querySelectorAll("tr");
-            if (rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2)) {
-                createExtractButton(table);
-            }
-        });
-    };
+    // 快捷键支持
+    hotkeys("alt+e", (event) => {
+        event.preventDefault();
+        if (currentTable) {
+            extractTableData(currentTable);
+        } else {
+            alert("请先将鼠标悬停在一个表格上！");
+        }
+    });
 
-    // 页面加载完成后执行
-    window.addEventListener("load", detectTables);
+    // 鼠标悬停事件监听
+    document.addEventListener("mouseover", detectAndActivateTable);
 })();
