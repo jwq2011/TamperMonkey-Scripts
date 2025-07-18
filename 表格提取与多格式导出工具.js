@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具（增强版）
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.6.1
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @author       Will
 // @match        *://*/*
 // @grant        GM_addStyle
+// @grant        GM_registerMenuCommand
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
@@ -90,14 +91,6 @@
         }
     `);
 
-    // 创建全局提取按钮
-    const createGlobalExtractButton = () => {
-        const button = document.createElement("div");
-        button.id = "global-extract-button";
-        button.textContent = "提取所有表格";
-        button.addEventListener("click", extractAllTables);
-        document.body.appendChild(button);
-    };
 
     // 创建单个表格提取按钮
     const createExtractButton = (table) => {
@@ -487,7 +480,9 @@
 
     // 页面加载完成后执行
     window.addEventListener("load", () => {
-        createGlobalExtractButton();
+        // 在脚本初始化时注册菜单命令
+        GM_registerMenuCommand("提取所有表格", extractAllTables);
+
         detectTables();
     });
 
