@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具（增强版）
 // @namespace    http://tampermonkey.net/
-// @version      1.6.3
+// @version      1.6.4
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @author       Will
 // @match        *://*/*
@@ -105,7 +105,8 @@
             overflow: hidden; /* 超出部分隐藏 */
             text-overflow: ellipsis; /* 省略号表示超出内容 */
         }
-        #export-menu {
+        .export-menu,
+        .preview-window {
             position: fixed;
             top: 50%;
             left: 50%;
@@ -115,26 +116,18 @@
             border: 1px solid #ccc;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             z-index: 10000;
-        }
-        #preview-window {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: #fff;
-            padding: 20px;
-            border: 1px solid #ccc;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            z-index: 10001;
             max-height: 80vh;
             overflow-y: auto;
         }
-        #preview-window table {
+        .preview-window {
+            z-index: 10001;
+        }
+        .preview-window table {
             border-collapse: collapse;
             width: 100%;
             max-width: 80vw;
         }
-        #preview-window td {
+        .preview-window td {
             padding: 5px;
             border: 1px solid #ddd;
         }
@@ -176,24 +169,25 @@
 
     // 显示批量导出菜单
     const showBatchExportMenu = (data) => {
+        console.log("显示批量导出菜单...");
+
+        // 移除旧的批量导出菜单
+        const existingMenu = document.getElementById("batch-export-menu");
+        if (existingMenu) {
+            existingMenu.remove();
+            console.log("移除了旧的批量导出菜单");
+        }
+
+        // 创建新的批量导出菜单
         const menu = document.createElement("div");
         menu.id = "batch-export-menu";
-        menu.style.position = "fixed";
-        menu.style.top = "50%";
-        menu.style.left = "50%";
-        menu.style.transform = "translate(-50%, -50%)";
-        menu.style.backgroundColor = "#fff";
-        menu.style.padding = "20px";
-        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-        menu.style.zIndex = "10000";
-
+        menu.className = "export-menu";
         menu.innerHTML = `
             <h3>批量导出选项：</h3>
             <button id="export-all-separate">逐个导出</button>
             <button id="export-all-merged">合并导出</button>
-            <button onclick="document.getElementById('batch-export-menu').remove();">关闭</button>
+            <button id="close-batch-menu-btn">关闭</button>
         `;
-
         document.body.appendChild(menu);
 
         // 逐个导出（暂未实现）
@@ -213,6 +207,17 @@
                 menu.remove();
             });
         });
+
+        // 关闭按钮事件绑定
+        const closeBtn = document.getElementById("close-batch-menu-btn");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", () => {
+                console.log("点击关闭按钮：关闭批量导出菜单");
+                menu.remove();
+            });
+        } else {
+            console.warn("未找到批量导出菜单的关闭按钮");
+        }
     };
 
     // 提取单个表格数据
@@ -228,8 +233,9 @@
     // 显示导出菜单
     const showExportMenu = (data, filename, table) => {
         console.log("显示导出菜单...");
+
         // 移除旧的导出菜单
-        const existingMenu = document.getElementById("table-extract-tool-export-menu");
+        const existingMenu = document.getElementById("export-menu");
         if (existingMenu) {
             existingMenu.remove();
             console.log("移除了旧的导出菜单");
@@ -237,17 +243,8 @@
 
         // 创建新的导出菜单
         const menu = document.createElement("div");
-        menu.id = "table-extract-tool-export-menu";
-        menu.style.position = "fixed";
-        menu.style.top = "50%";
-        menu.style.left = "50%";
-        menu.style.transform = "translate(-50%, -50%)";
-        menu.style.backgroundColor = "#fff";
-        menu.style.padding = "20px";
-        menu.style.border = "1px solid #ccc";
-        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-        menu.style.zIndex = "10000";
-
+        menu.id = "export-menu";
+        menu.className = "export-menu";
         menu.innerHTML = `
             <h3 style="margin-top: 0;">选择导出格式：</h3>
             <button class="export-btn" data-format="json">JSON</button>
@@ -261,10 +258,9 @@
             <button id="preview-data-btn">数据预览</button>
             <button id="copy-original-btn">复制到剪贴板（原格式）</button>
             <button id="copy-markdown-btn">复制到剪贴板（Markdown）</button>
-            <button onclick="document.getElementById('export-menu').remove();">关闭</button>
+            <button id="close-export-menu-btn">关闭</button>
             <div class="status-message" id="status-message"></div>
         `;
-
         document.body.appendChild(menu);
 
         // 绑定导出按钮事件
@@ -312,6 +308,17 @@
                 copyToClipboard(data, "markdown");
             });
         }
+
+        // 关闭按钮事件绑定
+        const closeBtn = document.getElementById("close-export-menu-btn");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", () => {
+                console.log("点击关闭按钮：关闭导出菜单");
+                menu.remove();
+            });
+        } else {
+            console.warn("未找到导出菜单的关闭按钮");
+        }
     };
 
     // 显示数据预览窗口
@@ -321,34 +328,33 @@
         // 移除旧的预览窗口
         const existingPreview = document.getElementById("preview-window");
         if (existingPreview) {
-            console.log("移除旧的数据预览窗口");
             existingPreview.remove();
+            console.log("移除了旧的数据预览窗口");
         }
 
         // 创建新的预览窗口
         const previewWindow = document.createElement("div");
         previewWindow.id = "preview-window";
+        previewWindow.className = "preview-window";
         previewWindow.innerHTML = `
             <h3>数据预览</h3>
             <table border="1">
                 ${data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}
             </table>
-            <button style="margin-top: 10px;" onclick="document.getElementById('preview-window').remove();">关闭</button>
+            <button id="close-preview-window-btn" style="margin-top: 10px;">关闭</button>
         `;
-        previewWindow.style.position = "fixed";
-        previewWindow.style.top = "50%";
-        previewWindow.style.left = "50%";
-        previewWindow.style.transform = "translate(-50%, -50%)";
-        previewWindow.style.backgroundColor = "#fff";
-        previewWindow.style.padding = "20px";
-        previewWindow.style.border = "1px solid #ccc";
-        previewWindow.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-        previewWindow.style.zIndex = "10001";
-        previewWindow.style.maxHeight = "80vh";
-        previewWindow.style.overflowY = "auto";
-
         document.body.appendChild(previewWindow);
-        console.log("数据预览窗口已创建");
+
+        // 关闭按钮事件绑定
+        const closeBtn = document.getElementById("close-preview-window-btn");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", () => {
+                console.log("点击关闭按钮：关闭数据预览窗口");
+                previewWindow.remove();
+            });
+        } else {
+            console.warn("未找到数据预览窗口的关闭按钮");
+        }
     };
 
     // 导出数据
