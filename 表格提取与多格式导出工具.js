@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具 (增强版)
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  自动检测网页中的表格，鼠标悬浮时显示“提取表格”按钮，支持快捷键或点击提取数据，并优先使用表格上方的小标题作为文件名。
 // @author       Will
 // @match        *://*/*
@@ -65,6 +65,16 @@
             z-index: 10001;
             max-height: 80vh;
             overflow-y: auto;
+        }
+        .status-message {
+            margin-top: 10px;
+            font-size: 14px;
+            color: green;
+        }
+        .error-message {
+            margin-top: 10px;
+            font-size: 14px;
+            color: red;
         }
     `);
 
@@ -148,22 +158,48 @@
             <button class="export-btn" data-format="html">HTML (带样式)</button>
             <button class="export-btn" data-format="pdf-formatted">PDF (带格式)</button>
             <button class="export-btn" data-format="pdf-text">PDF (纯文本)</button>
-            <button onclick="showPreviewWindow(${JSON.stringify(data)})">数据预览</button>
-            <button onclick="copyToClipboard(${JSON.stringify(data)}, 'original')">复制到剪贴板（原格式）</button>
-            <button onclick="copyToClipboard(${JSON.stringify(data)}, 'markdown')">复制到剪贴板（Markdown）</button>
+            <button id="preview-data-btn">数据预览</button>
+            <button id="copy-original-btn">复制到剪贴板（原格式）</button>
+            <button id="copy-markdown-btn">复制到剪贴板（Markdown）</button>
             <button onclick="document.getElementById('export-menu').remove();">关闭</button>
+            <div class="status-message" id="status-message"></div>
         `;
 
         document.body.appendChild(menu);
 
         // 绑定导出按钮事件
         document.querySelectorAll(".export-btn").forEach((btn) => {
-            btn.addEventListener("click", () => exportData(data, btn.dataset.format, filename, table));
+            btn.addEventListener("click", () => {
+                const format = btn.dataset.format;
+                exportData(data, format, filename, table).then((success) => {
+                    const statusMessage = document.getElementById("status-message");
+                    if (success) {
+                        statusMessage.textContent = `导出成功：${format.toUpperCase()} 文件已生成！`;
+                        statusMessage.className = "status-message";
+                    } else {
+                        statusMessage.textContent = `导出失败：请检查控制台错误信息！`;
+                        statusMessage.className = "error-message";
+                    }
+                });
+            });
+        });
+
+        // 绑定数据预览事件
+        document.getElementById("preview-data-btn").addEventListener("click", () => {
+            showPreviewWindow(data);
+        });
+
+        // 绑定复制到剪贴板事件
+        document.getElementById("copy-original-btn").addEventListener("click", () => {
+            copyToClipboard(data, "original");
+        });
+        document.getElementById("copy-markdown-btn").addEventListener("click", () => {
+            copyToClipboard(data, "markdown");
         });
     };
 
     // 导出数据
-    const exportData = (data, format, filename, table) => {
+    const exportData = async (data, format, filename, table) => {
         try {
             let finalFilename;
             switch (format) {
@@ -193,22 +229,21 @@
                     break;
                 case "pdf-formatted":
                     finalFilename = `${filename}.pdf`;
-                    savePDFFormatted(table, finalFilename);
+                    await savePDFFormatted(table, finalFilename);
                     break;
                 case "pdf-text":
                     finalFilename = `${filename}.pdf`;
-                    savePDFText(data, finalFilename);
+                    await savePDFText(data, finalFilename);
                     break;
                 default:
                     alert("不支持的格式！");
+                    return false;
             }
+            return true; // 成功
         } catch (error) {
             console.error("导出失败：", error);
-            alert(`导出失败，请检查浏览器控制台：${error.message}`);
+            return false; // 失败
         }
-
-        // 关闭导出菜单
-        document.getElementById("export-menu").remove();
     };
 
     // 转换为 CSV 格式
@@ -248,44 +283,53 @@
 
     // 保存为 PDF（带格式）
     const savePDFFormatted = (table, filename) => {
-        html2canvas(table).then((canvas) => {
-            const imgData = canvas.toDataURL("image/png");
-            const pdf = new jspdf.jsPDF();
-            const imgWidth = 210; // A4 宽度
-            const pageHeight = 297; // A4 高度
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            let heightLeft = imgHeight;
+        return new Promise((resolve, reject) => {
+            html2canvas(table).then((canvas) => {
+                const imgData = canvas.toDataURL("image/png");
+                const pdf = new jspdf.jsPDF();
+                const imgWidth = 210; // A4 宽度
+                const pageHeight = 297; // A4 高度
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
 
-            pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft >= 0) {
-                pdf.addPage();
-                pdf.addImage(imgData, "PNG", 0, -pageHeight + heightLeft, imgWidth, imgHeight);
+                pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
                 heightLeft -= pageHeight;
-            }
 
-            pdf.save(`${filename}`);
+                while (heightLeft >= 0) {
+                    pdf.addPage();
+                    pdf.addImage(imgData, "PNG", 0, -pageHeight + heightLeft, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                pdf.save(`${filename}`);
+                resolve();
+            }).catch(reject);
         });
     };
 
     // 保存为 PDF（纯文本）
     const savePDFText = (data, filename) => {
-        const pdf = new jspdf.jsPDF();
-        const pageHeight = 297; // A4 高度
-        let currentHeight = 10;
+        return new Promise((resolve, reject) => {
+            const pdf = new jspdf.jsPDF();
+            pdf.addFont("https://cdn.jsdelivr.net/gh/fengyuanchen/jsdocx@master/fonts/MicrosoftYaHei-normal.ttf", "MicrosoftYaHei", "normal");
+            pdf.setFont("MicrosoftYaHei");
 
-        data.forEach((row) => {
-            const line = row.join(" | ");
-            if (currentHeight > pageHeight - 10) {
-                pdf.addPage();
-                currentHeight = 10;
-            }
-            pdf.text(line, 10, currentHeight);
-            currentHeight += 10;
+            const pageHeight = 297; // A4 高度
+            let currentHeight = 10;
+
+            data.forEach((row) => {
+                const line = row.join(" | ");
+                if (currentHeight > pageHeight - 10) {
+                    pdf.addPage();
+                    currentHeight = 10;
+                }
+                pdf.text(line, 10, currentHeight);
+                currentHeight += 10;
+            });
+
+            pdf.save(`${filename}`);
+            resolve();
         });
-
-        pdf.save(`${filename}`);
     };
 
     // 复制到剪贴板
@@ -394,9 +438,14 @@
 
         // 合并导出
         document.getElementById("export-all-merged").addEventListener("click", () => {
-            exportData(data, "excel", "merged_tables");
-            alert("所有表格已合并导出！");
-            menu.remove();
+            exportData(data, "excel", "merged_tables").then((success) => {
+                if (success) {
+                    alert("所有表格已合并导出！");
+                } else {
+                    alert("导出失败，请检查控制台错误信息！");
+                }
+                menu.remove();
+            });
         });
     };
 
