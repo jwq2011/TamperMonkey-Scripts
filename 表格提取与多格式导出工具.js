@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具 (增强版)
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  自动检测网页中的表格，每个表格都有一个固定的“提取表格”按钮，支持快捷键或点击提取数据，并优先使用表格上方的小标题作为文件名。
+// @version      1.3
+// @description  自动检测网页中的表格，鼠标悬浮时显示“提取表格”按钮，支持快捷键或点击提取数据，并优先使用表格上方的小标题作为文件名。
 // @author       YourName
 // @match        *://*/*
 // @grant        GM_addStyle
@@ -26,6 +26,7 @@
             z-index: 9999;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             font-size: 12px;
+            display: none; /* 默认隐藏 */
         }
         #export-menu {
             position: fixed;
@@ -51,6 +52,33 @@
         button.style.top = `${rect.top + window.scrollY}px`;
         button.style.left = `${rect.right + window.scrollX + 10}px`;
         document.body.appendChild(button);
+
+        let hideTimeout;
+
+        // 鼠标进入表格范围时显示按钮
+        table.addEventListener("mouseenter", () => {
+            clearTimeout(hideTimeout); // 清除隐藏按钮的定时器
+            button.style.display = "block"; // 显示按钮
+        });
+
+        // 鼠标离开表格范围时延迟隐藏按钮
+        table.addEventListener("mouseleave", () => {
+            hideTimeout = setTimeout(() => {
+                button.style.display = "none"; // 隐藏按钮
+            }, 1000); // 延迟 1 秒隐藏按钮
+        });
+
+        // 鼠标进入按钮时清除隐藏按钮的定时器
+        button.addEventListener("mouseenter", () => {
+            clearTimeout(hideTimeout);
+        });
+
+        // 鼠标离开按钮时隐藏按钮
+        button.addEventListener("mouseleave", () => {
+            hideTimeout = setTimeout(() => {
+                button.style.display = "none"; // 隐藏按钮
+            }, 1000); // 延迟 1 秒隐藏按钮
+        });
 
         // 添加点击事件
         button.addEventListener("click", () => {
@@ -96,31 +124,43 @@
 
     // 导出数据
     const exportData = (data, format, filename) => {
-        const finalFilename = filename ? `${filename}.${format}` : `table.${format}`;
-        switch (format) {
-            case "json":
-                saveFile(JSON.stringify(data, null, 2), finalFilename, "application/json");
-                break;
-            case "csv":
-                saveFile(toCSV(data), finalFilename, "text/csv");
-                break;
-            case "excel":
-                saveExcel(data, finalFilename);
-                break;
-            case "markdown":
-                saveFile(toMarkdown(data), finalFilename, "text/plain");
-                break;
-            case "sql":
-                saveFile(toSQL(data), finalFilename, "text/plain");
-                break;
-            case "html":
-                saveFile(toHTML(data), finalFilename, "text/html");
-                break;
-            case "xml":
-                saveFile(toXML(data), finalFilename, "application/xml");
-                break;
-            default:
-                alert("不支持的格式！");
+        try {
+            let finalFilename;
+            switch (format) {
+                case "json":
+                    finalFilename = `${filename}.json`;
+                    saveFile(JSON.stringify(data, null, 2), finalFilename, "application/json");
+                    break;
+                case "csv":
+                    finalFilename = `${filename}.csv`;
+                    saveFile(toCSV(data), finalFilename, "text/csv");
+                    break;
+                case "excel":
+                    finalFilename = `${filename}.xlsx`; // 确保扩展名为 .xlsx
+                    saveExcel(data, finalFilename);
+                    break;
+                case "markdown":
+                    finalFilename = `${filename}.md`;
+                    saveFile(toMarkdown(data), finalFilename, "text/plain");
+                    break;
+                case "sql":
+                    finalFilename = `${filename}.sql`;
+                    saveFile(toSQL(data), finalFilename, "text/plain");
+                    break;
+                case "html":
+                    finalFilename = `${filename}.html`;
+                    saveFile(toHTML(data), finalFilename, "text/html");
+                    break;
+                case "xml":
+                    finalFilename = `${filename}.xml`;
+                    saveFile(toXML(data), finalFilename, "application/xml");
+                    break;
+                default:
+                    alert("不支持的格式！");
+            }
+        } catch (error) {
+            console.error("导出失败：", error);
+            alert(`导出失败，请检查浏览器控制台：${error.message}`);
         }
 
         // 关闭导出菜单
@@ -176,10 +216,17 @@
 
     // 保存 Excel 文件
     const saveExcel = (data, filename) => {
-        const worksheet = XLSX.utils.aoa_to_sheet(data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-        XLSX.writeFile(workbook, filename);
+        try {
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+            // 使用 XLSX.writeFile 导出 Excel 文件
+            XLSX.writeFile(workbook, filename);
+        } catch (error) {
+            console.error("Excel 导出失败：", error);
+            alert(`Excel 导出失败，请检查控制台：${error.message}`);
+        }
     };
 
     // 尝试猜测表格的小标题名称
@@ -192,7 +239,7 @@
             }
             parent = parent.parentElement;
         }
-        return null; // 默认为空
+        return "table"; // 默认文件名
     };
 
     // 自动检测表格并添加提取按钮
