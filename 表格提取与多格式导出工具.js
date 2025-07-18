@@ -1,14 +1,16 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具 (增强版)
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  自动检测网页中的表格，鼠标悬浮时显示“提取表格”按钮，支持快捷键或点击提取数据，并优先使用表格上方的小标题作为文件名。
-// @author       YourName
+// @author       Will
 // @match        *://*/*
 // @grant        GM_addStyle
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
 // @require      https://cdn.jsdelivr.net/npm/hotkeys-js/dist/hotkeys.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
 // ==/UserScript==
 
 (function () {
@@ -28,6 +30,18 @@
             font-size: 12px;
             display: none; /* 默认隐藏 */
         }
+        #global-extract-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #007BFF;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 10000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
         #export-menu {
             position: fixed;
             top: 50%;
@@ -39,9 +53,31 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             z-index: 10000;
         }
+        #preview-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 10001;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
     `);
 
-    // 创建提取按钮
+    // 创建全局提取按钮
+    const createGlobalExtractButton = () => {
+        const button = document.createElement("div");
+        button.id = "global-extract-button";
+        button.textContent = "提取所有表格";
+        button.addEventListener("click", extractAllTables);
+        document.body.appendChild(button);
+    };
+
+    // 创建单个表格提取按钮
     const createExtractButton = (table) => {
         const button = document.createElement("div");
         button.textContent = "提取表格";
@@ -93,11 +129,11 @@
             return Array.from(row.querySelectorAll("td, th")).map((cell) => cell.innerText.trim());
         });
 
-        showExportMenu(data, guessTableName(table));
+        showExportMenu(data, guessTableName(table), table);
     };
 
     // 显示导出菜单
-    const showExportMenu = (data, filename) => {
+    const showExportMenu = (data, filename, table) => {
         if (document.getElementById("export-menu")) return;
 
         const menu = document.createElement("div");
@@ -109,8 +145,12 @@
             <button class="export-btn" data-format="excel">Excel</button>
             <button class="export-btn" data-format="markdown">Markdown</button>
             <button class="export-btn" data-format="sql">SQL</button>
-            <button class="export-btn" data-format="html">HTML</button>
-            <button class="export-btn" data-format="xml">XML</button>
+            <button class="export-btn" data-format="html">HTML (带样式)</button>
+            <button class="export-btn" data-format="pdf-formatted">PDF (带格式)</button>
+            <button class="export-btn" data-format="pdf-text">PDF (纯文本)</button>
+            <button onclick="showPreviewWindow(${JSON.stringify(data)})">数据预览</button>
+            <button onclick="copyToClipboard(${JSON.stringify(data)}, 'original')">复制到剪贴板（原格式）</button>
+            <button onclick="copyToClipboard(${JSON.stringify(data)}, 'markdown')">复制到剪贴板（Markdown）</button>
             <button onclick="document.getElementById('export-menu').remove();">关闭</button>
         `;
 
@@ -118,12 +158,12 @@
 
         // 绑定导出按钮事件
         document.querySelectorAll(".export-btn").forEach((btn) => {
-            btn.addEventListener("click", () => exportData(data, btn.dataset.format, filename));
+            btn.addEventListener("click", () => exportData(data, btn.dataset.format, filename, table));
         });
     };
 
     // 导出数据
-    const exportData = (data, format, filename) => {
+    const exportData = (data, format, filename, table) => {
         try {
             let finalFilename;
             switch (format) {
@@ -136,7 +176,7 @@
                     saveFile(toCSV(data), finalFilename, "text/csv");
                     break;
                 case "excel":
-                    finalFilename = `${filename}.xlsx`; // 确保扩展名为 .xlsx
+                    finalFilename = `${filename}.xlsx`;
                     saveExcel(data, finalFilename);
                     break;
                 case "markdown":
@@ -149,11 +189,15 @@
                     break;
                 case "html":
                     finalFilename = `${filename}.html`;
-                    saveFile(toHTML(data), finalFilename, "text/html");
+                    saveHTMLWithStyle(table, finalFilename);
                     break;
-                case "xml":
-                    finalFilename = `${filename}.xml`;
-                    saveFile(toXML(data), finalFilename, "application/xml");
+                case "pdf-formatted":
+                    finalFilename = `${filename}.pdf`;
+                    savePDFFormatted(table, finalFilename);
+                    break;
+                case "pdf-text":
+                    finalFilename = `${filename}.pdf`;
+                    savePDFText(data, finalFilename);
                     break;
                 default:
                     alert("不支持的格式！");
@@ -193,19 +237,77 @@
         return insertStatements.join("\n");
     };
 
-    // 转换为 HTML 格式
-    const toHTML = (data) => {
-        const rows = data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`);
-        return `<table border="1">${rows.join("")}</table>`;
+    // 保存为 HTML 文件（保留表格样式）
+    const saveHTMLWithStyle = (table, filename) => {
+        const cloneTable = table.cloneNode(true); // 克隆表格节点
+        const wrapper = document.createElement("div");
+        wrapper.appendChild(cloneTable);
+        const htmlContent = wrapper.innerHTML;
+        saveFile(htmlContent, `${filename}.html`, "text/html");
     };
 
-    // 转换为 XML 格式
-    const toXML = (data) => {
-        const rows = data.map((row, i) => {
-            const cells = row.map((cell, j) => `<cell col="${j}">${cell}</cell>`).join("");
-            return `<row index="${i}">${cells}</row>`;
+    // 保存为 PDF（带格式）
+    const savePDFFormatted = (table, filename) => {
+        html2canvas(table).then((canvas) => {
+            const imgData = canvas.toDataURL("image/png");
+            const pdf = new jspdf.jsPDF();
+            const imgWidth = 210; // A4 宽度
+            const pageHeight = 297; // A4 高度
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            let heightLeft = imgHeight;
+
+            pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft >= 0) {
+                pdf.addPage();
+                pdf.addImage(imgData, "PNG", 0, -pageHeight + heightLeft, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            pdf.save(`${filename}`);
         });
-        return `<table>${rows.join("")}</table>`;
+    };
+
+    // 保存为 PDF（纯文本）
+    const savePDFText = (data, filename) => {
+        const pdf = new jspdf.jsPDF();
+        const pageHeight = 297; // A4 高度
+        let currentHeight = 10;
+
+        data.forEach((row) => {
+            const line = row.join(" | ");
+            if (currentHeight > pageHeight - 10) {
+                pdf.addPage();
+                currentHeight = 10;
+            }
+            pdf.text(line, 10, currentHeight);
+            currentHeight += 10;
+        });
+
+        pdf.save(`${filename}`);
+    };
+
+    // 复制到剪贴板
+    const copyToClipboard = (data, format) => {
+        let content;
+        if (format === "markdown") {
+            const header = data[0];
+            const body = data.slice(1);
+            const headerLine = "|" + header.join("|") + "|";
+            const separator = "|" + header.map(() => "---").join("|") + "|";
+            const bodyLines = body.map((row) => "|" + row.join("|") + "|");
+            content = [headerLine, separator, ...bodyLines].join("\n");
+        } else {
+            content = data.map((row) => row.join("\t")).join("\n"); // 原格式（Tab 分隔）
+        }
+
+        navigator.clipboard.writeText(content).then(() => {
+            alert("内容已复制到剪贴板！");
+        }).catch((error) => {
+            console.error("复制失败：", error);
+            alert("复制失败，请检查控制台！");
+        });
     };
 
     // 保存文件
@@ -220,8 +322,6 @@
             const worksheet = XLSX.utils.aoa_to_sheet(data);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-
-            // 使用 XLSX.writeFile 导出 Excel 文件
             XLSX.writeFile(workbook, filename);
         } catch (error) {
             console.error("Excel 导出失败：", error);
@@ -242,6 +342,78 @@
         return "table"; // 默认文件名
     };
 
+    // 批量提取所有表格
+    const extractAllTables = () => {
+        const tables = Array.from(document.querySelectorAll("table")).filter((table) => {
+            const rows = table.querySelectorAll("tr");
+            return rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2);
+        });
+
+        if (tables.length === 0) {
+            alert("未找到符合条件的表格！");
+            return;
+        }
+
+        const allData = tables.flatMap((table) => {
+            const rows = Array.from(table.querySelectorAll("tr"));
+            return rows.map((row) => {
+                return Array.from(row.querySelectorAll("td, th")).map((cell) => cell.innerText.trim());
+            });
+        });
+
+        showBatchExportMenu(allData);
+    };
+
+    // 显示批量导出菜单
+    const showBatchExportMenu = (data) => {
+        const menu = document.createElement("div");
+        menu.id = "batch-export-menu";
+        menu.style.position = "fixed";
+        menu.style.top = "50%";
+        menu.style.left = "50%";
+        menu.style.transform = "translate(-50%, -50%)";
+        menu.style.backgroundColor = "#fff";
+        menu.style.padding = "20px";
+        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+        menu.style.zIndex = "10000";
+
+        menu.innerHTML = `
+            <h3>批量导出选项：</h3>
+            <button id="export-all-separate">逐个导出</button>
+            <button id="export-all-merged">合并导出</button>
+            <button onclick="document.getElementById('batch-export-menu').remove();">关闭</button>
+        `;
+
+        document.body.appendChild(menu);
+
+        // 逐个导出
+        document.getElementById("export-all-separate").addEventListener("click", () => {
+            alert("逐个导出暂未实现！");
+            menu.remove();
+        });
+
+        // 合并导出
+        document.getElementById("export-all-merged").addEventListener("click", () => {
+            exportData(data, "excel", "merged_tables");
+            alert("所有表格已合并导出！");
+            menu.remove();
+        });
+    };
+
+    // 显示数据预览窗口
+    const showPreviewWindow = (data) => {
+        const previewWindow = document.createElement("div");
+        previewWindow.id = "preview-window";
+        previewWindow.innerHTML = `
+            <h3>数据预览</h3>
+            <table border="1">
+                ${data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}
+            </table>
+            <button onclick="document.getElementById('preview-window').remove();">关闭</button>
+        `;
+        document.body.appendChild(previewWindow);
+    };
+
     // 自动检测表格并添加提取按钮
     const detectTables = () => {
         document.querySelectorAll("table").forEach((table) => {
@@ -253,7 +425,10 @@
     };
 
     // 页面加载完成后执行
-    window.addEventListener("load", detectTables);
+    window.addEventListener("load", () => {
+        createGlobalExtractButton();
+        detectTables();
+    });
 
     // 快捷键支持
     hotkeys("alt+e", (event) => {
