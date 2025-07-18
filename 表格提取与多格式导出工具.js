@@ -1,49 +1,76 @@
 // ==UserScript==
 // @name         表格提取与多格式导出工具（增强版）
 // @namespace    http://tampermonkey.net/
-// @version      1.6.2
+// @version      1.6.3
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @author       Will
 // @match        *://*/*
-// @grant        GM_addStyle
-// @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addStyle
+// @grant        GM_registerMenuCommand
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
 // @license      MIT
-// @downloadURL https://update.greasyfork.org/scripts/542879/%E8%A1%A8%E6%A0%BC%E6%8F%90%E5%8F%96%E4%B8%8E%E5%A4%9A%E6%A0%BC%E5%BC%8F%E5%AF%BC%E5%87%BA%E5%B7%A5%E5%85%B7%EF%BC%88%E5%A2%9E%E5%BC%BA%E7%89%88%EF%BC%89.user.js
-// @updateURL https://update.greasyfork.org/scripts/542879/%E8%A1%A8%E6%A0%BC%E6%8F%90%E5%8F%96%E4%B8%8E%E5%A4%9A%E6%A0%BC%E5%BC%8F%E5%AF%BC%E5%87%BA%E5%B7%A5%E5%85%B7%EF%BC%88%E5%A2%9E%E5%BC%BA%E7%89%88%EF%BC%89.meta.js
 // ==/UserScript==
 
 (function () {
     "use strict";
 
-    /* 本地嵌入 hotkeys-js 库 */
-    (function (global, factory) {
-        typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-        typeof define === 'function' && define.amd ? define(factory) :
-        (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.hotkeys = factory());
-    }(this, (function () {
-        /*! hotkeys-js v3.13.15 | MIT © 2025 kenny wong <wowohoo@qq.com> https://jaywcjlove.github.io/hotkeys-js */
-        ((e,t)=>{"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(e="undefined"!=typeof globalThis?globalThis:e||self).hotkeys=t()})(this,function(){var e="undefined"!=typeof navigator&&0<navigator.userAgent.toLowerCase().indexOf("firefox");function u(e,t,n,o){e.addEventListener?e.addEventListener(t,n,o):e.attachEvent&&e.attachEvent("on".concat(t),n)}function i(e,t,n,o){e.removeEventListener?e.removeEventListener(t,n,o):e.detachEvent&&e.detachEvent("on".concat(t),n)}function h(t,e){var n=e.slice(0,e.length-1);for(let e=0;e<n.length;e++)n[e]=t[n[e].toLowerCase()];return n}function k(e){var t=(e=(e="string"!=typeof e?"":e).replace(/\s/g,"")).split(",");let n=t.lastIndexOf("");for(;0<=n;)t[n-1]+=",",t.splice(n,1),n=t.lastIndexOf("");return t}let o={backspace:8,"\u232b":8,tab:9,clear:12,enter:13,"\u21a9":13,return:13,esc:27,escape:27,space:32,left:37,up:38,right:39,down:40,arrowup:38,arrowdown:40,arrowleft:37,arrowright:39,del:46,delete:46,ins:45,insert:45,home:36,end:35,pageup:33,pagedown:34,capslock:20,num_0:96,num_1:97,num_2:98,num_3:99,num_4:100,num_5:101,num_6:102,num_7:103,num_8:104,num_9:105,num_multiply:106,num_add:107,num_enter:108,num_subtract:109,num_decimal:110,num_divide:111,"\u21ea":20,",":188,".":190,"/":191,"`":192,"-":e?173:189,"=":e?61:187,";":e?59:186,"'":222,"{":219,"}":221,"[":219,"]":221,"\\":220},m={"\u21e7":16,shift:16,"\u2325":18,alt:18,option:18,"\u2303":17,ctrl:17,control:17,"\u2318":91,cmd:91,meta:91,command:91},g={16:"shiftKey",18:"altKey",17:"ctrlKey",91:"metaKey",shiftKey:16,ctrlKey:17,altKey:18,metaKey:91},w={16:!1,18:!1,17:!1,91:!1},v={};for(let e=1;e<20;e++)o["f".concat(e)]=111+e;let O=[],b=null,t="all",E=new Map,K=e=>o[e.toLowerCase()]||m[e.toLowerCase()]||e.toUpperCase().charCodeAt(0);function l(e){t=e||"all"}function j(){return t||"all"}function C(n){if(void 0===n)Object.keys(v).forEach(e=>{Array.isArray(v[e])&&v[e].forEach(e=>a(e)),delete v[e]}),s(null);else if(Array.isArray(n))n.forEach(e=>{e.key&&a(e)});else if("object"==typeof n)n.key&&a(n);else if("string"==typeof n){for(var o=arguments.length,r=Array(1<o?o-1:0),i=1;i<o;i++)r[i-1]=arguments[i];let[e,t]=r;"function"==typeof e&&(t=e,e=""),a({key:n,scope:e,method:t,splitKey:"+"})}}let a=e=>{let{key:t,scope:i,method:l,splitKey:n="+"}=e;k(t).forEach(e=>{var e=e.split(n),t=e.length,r=e[t-1],r="*"===r?"*":K(r);if(v[r]){i=i||j();let n=1<t?h(m,e):[],o=[];v[r]=v[r].filter(e=>{var t=(!l||e.method===l)&&e.scope===i&&((e,t)=>{var n=e.length<t.length?t:e,o=e.length<t.length?e:t;let r=!0;for(let e=0;e<n.length;e++)~o.indexOf(n[e])||(r=!1);return r})(e.mods,n);return t&&o.push(e.element),!t}),o.forEach(e=>s(e))}})};function x(t,n,o,e){if(n.element===e){let e;if(n.scope===o||"all"===n.scope){for(var r in e=0<n.mods.length,w)Object.prototype.hasOwnProperty.call(w,r)&&(!w[r]&&~n.mods.indexOf(+r)||w[r]&&!~n.mods.indexOf(+r))&&(e=!1);(0!==n.mods.length||w[16]||w[18]||w[17]||w[91])&&!e&&"*"!==n.shortcut||(n.keys=[],n.keys=n.keys.concat(O),!1===n.method(t,n)&&(t.preventDefault?t.preventDefault():t.returnValue=!1,t.stopPropagation&&t.stopPropagation(),t.cancelBubble)&&(t.cancelBubble=!0))}}}function L(n,t){var e,o=v["*"];let r=n.keyCode||n.which||n.charCode;if((!n.key||"capslock"!=n.key.toLowerCase())&&_.filter.call(this,n)){if(93!==r&&224!==r||(r=91),~O.indexOf(r)||229===r||O.push(r),["metaKey","ctrlKey","altKey","shiftKey"].forEach(e=>{var t=g[e];n[e]&&!~O.indexOf(t)?O.push(t):!n[e]&&~O.indexOf(t)?O.splice(O.indexOf(t),1):"metaKey"===e&&n[e]&&(O=O.filter(e=>e in g||e===r))}),r in w){for(var i in w[r]=!0,m)Object.prototype.hasOwnProperty.call(m,i)&&(e=g[m[i]],_[i]=n[e]);if(!o)return}for(var l in w)Object.prototype.hasOwnProperty.call(w,l)&&(w[l]=n[g[l]]);n.getModifierState&&(!n.altKey||n.ctrlKey)&&n.getModifierState("AltGraph")&&(~O.indexOf(17)||O.push(17),~O.indexOf(18)||O.push(18),w[17]=!0,w[18]=!0);var a=j();if(o)for(let e=0;e<o.length;e++)o[e].scope===a&&("keydown"===n.type&&o[e].keydown||"keyup"===n.type&&o[e].keyup)&&x(n,o[e],a,t);if(r in v){var s=v[r],c=s.length;for(let e=0;e<c;e++)if(("keydown"===n.type&&s[e].keydown||"keyup"===n.type&&s[e].keyup)&&s[e].key){var f=s[e],p=f.splitKey,d=f.key.split(p),y=[];for(let e=0;e<d.length;e++)y.push(K(d[e]));y.sort().join("")===O.sort().join("")&&x(n,f,a,t)}}}}function _(e,t,n){O=[];var o,r=k(e);let i=[],l="all",a=document,s=0,c=!1,f=!0,p="+",d=!1,y=!1;for(void 0===n&&"function"==typeof t&&(n=t),"[object Object]"===Object.prototype.toString.call(t)&&(t.scope&&(l=t.scope),t.element&&(a=t.element),t.keyup&&(c=t.keyup),void 0!==t.keydown&&(f=t.keydown),void 0!==t.capture&&(d=t.capture),"string"==typeof t.splitKey&&(p=t.splitKey),!0===t.single)&&(y=!0),"string"==typeof t&&(l=t),y&&C(e,l);s<r.length;s++)e=r[s].split(p),i=[],1<e.length&&(i=h(m,e)),(e="*"===(e=e[e.length-1])?"*":K(e))in v||(v[e]=[]),v[e].push({keyup:c,keydown:f,scope:l,mods:i,shortcut:r[s],method:n,key:r[s],splitKey:p,element:a});void 0!==a&&window&&(E.has(a)||(t=function(){return L(0<arguments.length&&void 0!==arguments[0]?arguments[0]:window.event,a)},o=function(){var t=0<arguments.length&&void 0!==arguments[0]?arguments[0]:window.event;L(t,a);{let e=t.keyCode||t.which||t.charCode;t.key&&"capslock"==t.key.toLowerCase()&&(e=K(t.key));var n=O.indexOf(e);if(n<0||O.splice(n,1),t.key&&"meta"==t.key.toLowerCase()&&O.splice(0,O.length),(e=93!==e&&224!==e?e:91)in w)for(var o in w[e]=!1,m)m[o]===e&&(_[o]=!1)}},E.set(a,{keydownListener:t,keyupListenr:o,capture:d}),u(a,"keydown",t,d),u(a,"keyup",o,d)),b||(t=()=>{O=[]},b={listener:t,capture:d},u(window,"focus",t,d)))}function s(t){var e,n,o,r=Object.values(v).flat();r.findIndex(e=>{e=e.element;return e===t})<0&&({keydownListener:o,keyupListenr:n,capture:e}=E.get(t)||{},o)&&n&&(i(t,"keyup",n,e),i(t,"keydown",o,e),E.delete(t)),0<r.length&&0<E.size||(Object.keys(E).forEach(e=>{var{keydownListener:t,keyupListenr:n,capture:o}=E.get(e)||{};t&&n&&(i(e,"keyup",n,o),i(e,"keydown",t,o),E.delete(e))}),E.clear(),Object.keys(v).forEach(e=>delete v[e]),b&&({listener:n,capture:o}=b,i(window,"focus",n,o),b=null))}var n,r={getPressedKeyString:function(){return O.map(e=>{return n=e,Object.keys(o).find(e=>o[e]===n)||(t=e,Object.keys(m).find(e=>m[e]===t))||String.fromCharCode(e);var t,n})},setScope:l,getScope:j,deleteScope:function(e,t){var n,o;let r;for(o in e=e||j(),v)if(Object.prototype.hasOwnProperty.call(v,o))for(n=v[o],r=0;r<n.length;)n[r].scope===e?n.splice(r,1).forEach(e=>{e=e.element;return s(e)}):r++;j()===e&&l(t||"all")},getPressedKeyCodes:function(){return O.slice(0)},getAllKeyCodes:function(){let r=[];return Object.keys(v).forEach(e=>{v[e].forEach(e=>{var{key:e,scope:t,mods:n,shortcut:o}=e;r.push({scope:t,shortcut:o,mods:n,keys:e.split("+").map(e=>K(e))})})}),r},isPressed:function(e){return"string"==typeof e&&(e=K(e)),!!~O.indexOf(e)},filter:function(e){var t=(e=e.target||e.srcElement).tagName;let n=!0;var o="INPUT"===t&&!["checkbox","radio","range","button","file","reset","submit","color"].includes(e.type);return n=!e.isContentEditable&&(!o&&"TEXTAREA"!==t&&"SELECT"!==t||e.readOnly)?n:!1},trigger:function(t){let n=1<arguments.length&&void 0!==arguments[1]?arguments[1]:"all";Object.keys(v).forEach(e=>{v[e].filter(e=>e.scope===n&&e.shortcut===t).forEach(e=>{e&&e.method&&e.method()})})},unbind:C,keyMap:o,modifier:m,modifierMap:g};for(n in r)Object.prototype.hasOwnProperty.call(r,n)&&(_[n]=r[n]);if("undefined"!=typeof window){let t=window.hotkeys;_.noConflict=e=>(e&&window.hotkeys===_&&(window.hotkeys=t),_),window.hotkeys=_}return _});
-    })));
-
-    // 初始化设置
+    // 初始化默认设置
     const defaultSettings = {
         showGlobalButton: false, // 默认不显示全局按钮
     };
 
     // 获取用户设置（如果不存在，则使用默认值）
-    const settings = Object.assign({}, defaultSettings, GM_getValue("settings", {}));
+    let settings;
+    try {
+        const storedSettings = GM_getValue("settings", "{}");
+        settings = Object.assign({}, defaultSettings, typeof storedSettings === "string" ? JSON.parse(storedSettings) : storedSettings);
+    } catch (error) {
+        console.error("解析用户设置失败：", error);
+        settings = Object.assign({}, defaultSettings);
+    }
+    console.log("加载设置：", settings);
 
-    // 保存设置到存储
+    // 保存用户设置
     const saveSettings = () => {
-        GM_setValue("settings", settings);
+        try {
+            GM_setValue("settings", JSON.stringify(settings));
+            console.log("保存设置：", settings);
+        } catch (error) {
+            console.error("保存用户设置失败：", error);
+        }
     };
 
+    // 创建 Tampermonkey 设置命令
+    GM_registerMenuCommand("设置 - 显示全局按钮", () => {
+        const userInput = confirm(
+            "是否显示全局“提取所有表格”按钮？\n当前状态：" +
+            (settings.showGlobalButton ? "已启用" : "已禁用")
+        );
+        settings.showGlobalButton = userInput;
+        saveSettings();
+
+        // 根据设置决定是否显示按钮
+        if (settings.showGlobalButton) {
+            createGlobalExtractButton();
+        } else {
+            const existingButton = document.getElementById("global-extract-button");
+            if (existingButton) {
+                existingButton.remove();
+                console.log("移除了全局按钮");
+            }
+        }
+    });
+
+    // 注册右键菜单命令
+    GM_registerMenuCommand("提取所有表格", () => {
+        console.log("执行提取所有表格命令");
+        extractAllTables();
+    });
 
     // 添加样式
     GM_addStyle(`
@@ -70,6 +97,13 @@
             cursor: pointer;
             z-index: 10000;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            width: auto; /* 自适应宽度 */
+            max-width: 200px; /* 最大宽度限制 */
+            text-align: center;
+            white-space: nowrap; /* 防止换行 */
+            overflow: hidden; /* 超出部分隐藏 */
+            text-overflow: ellipsis; /* 省略号表示超出内容 */
         }
         #export-menu {
             position: fixed;
@@ -95,6 +129,15 @@
             max-height: 80vh;
             overflow-y: auto;
         }
+        #preview-window table {
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 80vw;
+        }
+        #preview-window td {
+            padding: 5px;
+            border: 1px solid #ddd;
+        }
         .status-message {
             margin-top: 10px;
             font-size: 14px;
@@ -107,53 +150,72 @@
         }
     `);
 
-
-    // 创建单个表格提取按钮
-    const createExtractButton = (table) => {
-        const button = document.createElement("div");
-        button.textContent = "提取表格";
-        button.classList.add("table-extract-button");
-
-        // 固定按钮位置
-        const rect = table.getBoundingClientRect();
-        button.style.top = `${rect.top + window.scrollY}px`;
-        button.style.left = `${rect.right + window.scrollX + 10}px`;
-        document.body.appendChild(button);
-
-        let hideTimeout;
-
-        // 鼠标进入表格范围时显示按钮
-        table.addEventListener("mouseenter", () => {
-            clearTimeout(hideTimeout); // 清除隐藏按钮的定时器
-            button.style.display = "block"; // 显示按钮
+    // 批量提取所有表格
+    const extractAllTables = () => {
+        console.log("执行批量提取所有表格逻辑");
+        const tables = Array.from(document.querySelectorAll("table")).filter((table) => {
+            const rows = table.querySelectorAll("tr");
+            return rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2);
         });
 
-        // 鼠标离开表格范围时延迟隐藏按钮
-        table.addEventListener("mouseleave", () => {
-            hideTimeout = setTimeout(() => {
-                button.style.display = "none"; // 隐藏按钮
-            }, 1000); // 延迟 1 秒隐藏按钮
+        if (tables.length === 0) {
+            alert("未找到符合条件的表格！");
+            console.warn("未找到符合条件的表格");
+            return;
+        }
+
+        const allData = tables.flatMap((table) => {
+            const rows = Array.from(table.querySelectorAll("tr"));
+            return rows.map((row) =>
+                Array.from(row.querySelectorAll("td, th")).map((cell) => cell.innerText.trim())
+            );
         });
 
-        // 鼠标进入按钮时清除隐藏按钮的定时器
-        button.addEventListener("mouseenter", () => {
-            clearTimeout(hideTimeout);
+        showBatchExportMenu(allData); // 调用批量导出菜单
+    };
+
+    // 显示批量导出菜单
+    const showBatchExportMenu = (data) => {
+        const menu = document.createElement("div");
+        menu.id = "batch-export-menu";
+        menu.style.position = "fixed";
+        menu.style.top = "50%";
+        menu.style.left = "50%";
+        menu.style.transform = "translate(-50%, -50%)";
+        menu.style.backgroundColor = "#fff";
+        menu.style.padding = "20px";
+        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+        menu.style.zIndex = "10000";
+
+        menu.innerHTML = `
+            <h3>批量导出选项：</h3>
+            <button id="export-all-separate">逐个导出</button>
+            <button id="export-all-merged">合并导出</button>
+            <button onclick="document.getElementById('batch-export-menu').remove();">关闭</button>
+        `;
+
+        document.body.appendChild(menu);
+
+        // 逐个导出（暂未实现）
+        document.getElementById("export-all-separate").addEventListener("click", () => {
+            alert("逐个导出暂未实现！");
+            menu.remove();
         });
 
-        // 鼠标离开按钮时隐藏按钮
-        button.addEventListener("mouseleave", () => {
-            hideTimeout = setTimeout(() => {
-                button.style.display = "none"; // 隐藏按钮
-            }, 1000); // 延迟 1 秒隐藏按钮
-        });
-
-        // 添加点击事件
-        button.addEventListener("click", () => {
-            extractTableData(table);
+        // 合并导出
+        document.getElementById("export-all-merged").addEventListener("click", () => {
+            exportData(data, "excel", "merged_tables").then((success) => {
+                if (success) {
+                    alert("所有表格已合并导出！");
+                } else {
+                    alert("导出失败，请检查控制台错误信息！");
+                }
+                menu.remove();
+            });
         });
     };
 
-    // 提取表格数据
+    // 提取单个表格数据
     const extractTableData = (table) => {
         const rows = Array.from(table.querySelectorAll("tr"));
         const data = rows.map((row) => {
@@ -165,10 +227,27 @@
 
     // 显示导出菜单
     const showExportMenu = (data, filename, table) => {
-        if (document.getElementById("export-menu")) return;
+        console.log("显示导出菜单...");
+        // 移除旧的导出菜单
+        const existingMenu = document.getElementById("table-extract-tool-export-menu");
+        if (existingMenu) {
+            existingMenu.remove();
+            console.log("移除了旧的导出菜单");
+        }
 
+        // 创建新的导出菜单
         const menu = document.createElement("div");
-        menu.id = "export-menu";
+        menu.id = "table-extract-tool-export-menu";
+        menu.style.position = "fixed";
+        menu.style.top = "50%";
+        menu.style.left = "50%";
+        menu.style.transform = "translate(-50%, -50%)";
+        menu.style.backgroundColor = "#fff";
+        menu.style.padding = "20px";
+        menu.style.border = "1px solid #ccc";
+        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+        menu.style.zIndex = "10000";
+
         menu.innerHTML = `
             <h3 style="margin-top: 0;">选择导出格式：</h3>
             <button class="export-btn" data-format="json">JSON</button>
@@ -205,18 +284,71 @@
             });
         });
 
-        // 绑定数据预览事件
-        document.getElementById("preview-data-btn").addEventListener("click", () => {
-            showPreviewWindow(data);
-        });
+        // 数据预览按钮事件绑定
+        const previewBtn = document.getElementById("preview-data-btn");
+        if (previewBtn) {
+            previewBtn.addEventListener("click", () => {
+                console.log("点击数据预览按钮：触发预览功能");
+                showPreviewWindow(data);
+            });
+        } else {
+            console.warn("未找到数据预览按钮");
+        }
 
-        // 绑定复制到剪贴板事件
-        document.getElementById("copy-original-btn").addEventListener("click", () => {
-            copyToClipboard(data, "original");
-        });
-        document.getElementById("copy-markdown-btn").addEventListener("click", () => {
-            copyToClipboard(data, "markdown");
-        });
+        // 复制到剪贴板（原格式）
+        const copyOriginalBtn = document.getElementById("copy-original-btn");
+        if (copyOriginalBtn) {
+            copyOriginalBtn.addEventListener("click", () => {
+                console.log("点击复制到剪贴板（原格式）");
+                copyToClipboard(data, "original");
+            });
+        }
+
+        // 复制到剪贴板（Markdown）
+        const copyMarkdownBtn = document.getElementById("copy-markdown-btn");
+        if (copyMarkdownBtn) {
+            copyMarkdownBtn.addEventListener("click", () => {
+                console.log("点击复制到剪贴板（Markdown）");
+                copyToClipboard(data, "markdown");
+            });
+        }
+    };
+
+    // 显示数据预览窗口
+    const showPreviewWindow = (data) => {
+        console.log("显示数据预览窗口");
+
+        // 移除旧的预览窗口
+        const existingPreview = document.getElementById("preview-window");
+        if (existingPreview) {
+            console.log("移除旧的数据预览窗口");
+            existingPreview.remove();
+        }
+
+        // 创建新的预览窗口
+        const previewWindow = document.createElement("div");
+        previewWindow.id = "preview-window";
+        previewWindow.innerHTML = `
+            <h3>数据预览</h3>
+            <table border="1">
+                ${data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}
+            </table>
+            <button style="margin-top: 10px;" onclick="document.getElementById('preview-window').remove();">关闭</button>
+        `;
+        previewWindow.style.position = "fixed";
+        previewWindow.style.top = "50%";
+        previewWindow.style.left = "50%";
+        previewWindow.style.transform = "translate(-50%, -50%)";
+        previewWindow.style.backgroundColor = "#fff";
+        previewWindow.style.padding = "20px";
+        previewWindow.style.border = "1px solid #ccc";
+        previewWindow.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
+        previewWindow.style.zIndex = "10001";
+        previewWindow.style.maxHeight = "80vh";
+        previewWindow.style.overflowY = "auto";
+
+        document.body.appendChild(previewWindow);
+        console.log("数据预览窗口已创建");
     };
 
     // 导出数据
@@ -394,7 +526,7 @@
         }
     };
 
-    // 尝试猜测表格的小标题名称
+    // 猜测表格的小标题名称
     const guessTableName = (table) => {
         let parent = table.parentElement;
         while (parent && parent.tagName !== "BODY") {
@@ -407,122 +539,44 @@
         return "table"; // 默认文件名
     };
 
-    // 批量提取所有表格
-    const extractAllTables = () => {
-        const tables = Array.from(document.querySelectorAll("table")).filter((table) => {
-            const rows = table.querySelectorAll("tr");
-            return rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2);
-        });
-
-        if (tables.length === 0) {
-            alert("未找到符合条件的表格！");
+    // 创建全局提取按钮
+    const createGlobalExtractButton = () => {
+        if (!settings.showGlobalButton) {
+            console.log("用户未启用全局按钮，跳过创建");
             return;
         }
 
-        const allData = tables.flatMap((table) => {
-            const rows = Array.from(table.querySelectorAll("tr"));
-            return rows.map((row) => {
-                return Array.from(row.querySelectorAll("td, th")).map((cell) => cell.innerText.trim());
-            });
-        });
-
-        showBatchExportMenu(allData);
-    };
-
-    // 显示批量导出菜单
-    const showBatchExportMenu = (data) => {
-        const menu = document.createElement("div");
-        menu.id = "batch-export-menu";
-        menu.style.position = "fixed";
-        menu.style.top = "50%";
-        menu.style.left = "50%";
-        menu.style.transform = "translate(-50%, -50%)";
-        menu.style.backgroundColor = "#fff";
-        menu.style.padding = "20px";
-        menu.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)";
-        menu.style.zIndex = "10000";
-
-        menu.innerHTML = `
-            <h3>批量导出选项：</h3>
-            <button id="export-all-separate">逐个导出</button>
-            <button id="export-all-merged">合并导出</button>
-            <button onclick="document.getElementById('batch-export-menu').remove();">关闭</button>
-        `;
-
-        document.body.appendChild(menu);
-
-        // 逐个导出
-        document.getElementById("export-all-separate").addEventListener("click", () => {
-            alert("逐个导出暂未实现！");
-            menu.remove();
-        });
-
-        // 合并导出
-        document.getElementById("export-all-merged").addEventListener("click", () => {
-            exportData(data, "excel", "merged_tables").then((success) => {
-                if (success) {
-                    alert("所有表格已合并导出！");
-                } else {
-                    alert("导出失败，请检查控制台错误信息！");
-                }
-                menu.remove();
-            });
-        });
-    };
-
-    // 显示数据预览窗口
-    const showPreviewWindow = (data) => {
-        const previewWindow = document.createElement("div");
-        previewWindow.id = "preview-window";
-        previewWindow.innerHTML = `
-            <h3>数据预览</h3>
-            <table border="1">
-                ${data.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}
-            </table>
-            <button onclick="document.getElementById('preview-window').remove();">关闭</button>
-        `;
-        document.body.appendChild(previewWindow);
-    };
-
-    // 自动检测表格并添加提取按钮
-    const detectTables = () => {
-        document.querySelectorAll("table").forEach((table) => {
-            const rows = table.querySelectorAll("tr");
-            if (rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2)) {
-                createExtractButton(table);
-            }
-        });
-    };
-
-
-    // 创建全局提取按钮
-    const createGlobalExtractButton = () => {
-        // 如果用户未启用按钮，则不创建
-        if (!settings.showGlobalButton) return;
+        // 如果按钮已存在，先移除
+        const existingButton = document.getElementById("global-extract-button");
+        if (existingButton) {
+            existingButton.remove();
+            console.log("移除旧的全局按钮");
+        }
 
         const button = document.createElement("div");
         button.id = "global-extract-button";
         button.textContent = "提取所有表格";
         button.style.position = "fixed";
-        button.style.top = "20px"; // 默认位置
+        button.style.top = "20px";
         button.style.right = "20px";
         button.style.zIndex = "10000";
-        button.style.backgroundColor = "#007BFF";
-        button.style.color = "white";
-        button.style.padding = "10px 15px";
-        button.style.borderRadius = "5px";
-        button.style.cursor = "pointer";
-        button.style.boxShadow = "0 2px 5px rgba(0, 0, 0, 0.2)";
-        button.addEventListener("click", extractAllTables);
+
+        // 将函数绑定到按钮点击事件
+        button.addEventListener("click", () => {
+            console.log("点击全局按钮：触发提取所有表格");
+            extractAllTables();
+        });
 
         document.body.appendChild(button);
+        console.log("创建新的全局按钮");
 
-        // 添加拖动功能
+        // 拖动功能
         let isDragging = false;
         let offsetX = 0;
         let offsetY = 0;
 
         button.addEventListener("mousedown", (e) => {
+            console.log("开始拖动全局按钮");
             isDragging = true;
             offsetX = e.clientX - button.getBoundingClientRect().left;
             offsetY = e.clientY - button.getBoundingClientRect().top;
@@ -530,57 +584,86 @@
 
         document.addEventListener("mousemove", (e) => {
             if (isDragging) {
-                button.style.left = `${e.clientX - offsetX}px`;
-                button.style.top = `${e.clientY - offsetY}px`;
+                console.log("拖动全局按钮到新位置");
+                const newX = Math.min(Math.max(e.clientX - offsetX, 0), window.innerWidth - button.offsetWidth);
+                const newY = Math.min(Math.max(e.clientY - offsetY, 0), window.innerHeight - button.offsetHeight);
+                button.style.left = `${newX}px`;
+                button.style.top = `${newY}px`;
             }
         });
 
         document.addEventListener("mouseup", () => {
+            console.log("结束拖动全局按钮");
             isDragging = false;
         });
     };
 
-    // 创建脚本设置页面
-    const createSettingsPage = () => {
-        const settingsDiv = document.createElement("div");
-        settingsDiv.innerHTML = `
-            <div style="position: fixed; top: 20px; left: 20px; background: #fff; padding: 20px; border: 1px solid #ccc; z-index: 10000;">
-                <label>
-                    <input type="checkbox" id="toggle-global-button" ${settings.showGlobalButton ? "checked" : ""}>
-                    显示全局“提取所有表格”按钮
-                </label>
-            </div>
-        `;
+    // 自动检测表格并添加提取按钮
+    const detectTables = () => {
+        console.log("检测页面中的表格...");
+        const tables = Array.from(document.querySelectorAll("table")).filter((table) => {
+            const rows = table.querySelectorAll("tr");
+            return rows.length >= 2 && Array.from(rows).some((row) => row.children.length >= 2);
+        });
 
-        document.body.appendChild(settingsDiv);
+        if (tables.length === 0) {
+            console.warn("未找到符合条件的表格");
+        } else {
+            console.log(`检测到 ${tables.length} 个表格`);
+        }
 
-        // 绑定复选框事件
-        document.getElementById("toggle-global-button").addEventListener("change", (e) => {
-            settings.showGlobalButton = e.target.checked;
-            saveSettings(); // 保存设置
-
-            // 根据设置决定是否显示按钮
-            if (settings.showGlobalButton) {
-                createGlobalExtractButton();
-            } else {
-                const existingButton = document.getElementById("global-extract-button");
-                if (existingButton) existingButton.remove();
-            }
+        tables.forEach((table) => {
+            createExtractButton(table);
         });
     };
 
+    // 创建单个表格提取按钮
+    const createExtractButton = (table) => {
+        const button = document.createElement("div");
+        button.textContent = "提取表格";
+        button.classList.add("table-extract-button");
+
+        // 固定按钮位置
+        const rect = table.getBoundingClientRect();
+        button.style.top = `${rect.top + window.scrollY}px`;
+        button.style.left = `${rect.right + window.scrollX + 10}px`;
+        document.body.appendChild(button);
+
+        let hideTimeout;
+
+        // 鼠标进入表格范围时显示按钮
+        table.addEventListener("mouseenter", () => {
+            clearTimeout(hideTimeout);
+            button.style.display = "block";
+            console.log("显示表格提取按钮");
+        });
+
+        // 鼠标离开表格范围时延迟隐藏按钮
+        table.addEventListener("mouseleave", () => {
+            hideTimeout = setTimeout(() => {
+                button.style.display = "none";
+                console.log("隐藏表格提取按钮");
+            }, 1000);
+        });
+
+        // 添加点击事件
+        button.addEventListener("click", () => {
+            console.log("点击表格提取按钮：触发提取表格数据");
+            extractTableData(table);
+        });
+    };
 
     // 页面加载完成后执行
     window.addEventListener("load", () => {
-        // 初始化设置页面
-        createSettingsPage();
+        console.log("页面加载完成，初始化脚本");
+
         // 根据设置决定是否显示全局按钮
         if (settings.showGlobalButton) {
+            console.log("用户启用了全局按钮，尝试创建按钮");
             createGlobalExtractButton();
+        } else {
+            console.log("用户未启用全局按钮，跳过创建");
         }
-
-        // 在脚本初始化时注册右键菜单命令
-        GM_registerMenuCommand("提取所有表格", extractAllTables);
 
         // 检测表格并添加提取按钮
         detectTables();
