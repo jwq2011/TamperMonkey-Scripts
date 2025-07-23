@@ -1,10 +1,13 @@
 ﻿// ==UserScript==
 // @name         Reddit Chinese Translation Detector
+// @name:zh-CN   Reddit 中文翻译检测器
+// @name:zh-TW   Reddit 中文翻譯檢測器
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Detect and navigate to Chinese translated Reddit posts. Automatically checks if Reddit posts support ?tl=zh-hans parameter and provides one-click switching.
-// @description:zh-CN  检测并导航到 Reddit 的中文翻译帖子。自动检查 Reddit 帖子是否支持中文翻译帖子，并提供一键切换功能。
-// @author       Will
+// @description:zh-CN  检测并导航到 Reddit 的中文翻译帖子。自动检查 Reddit 帖子是否支持 ?tl=zh-hans 参数，并提供一键切换功能。
+// @description:zh-TW  檢測並導航到 Reddit 的中文翻譯貼文。自動檢查 Reddit 貼文是否支援 ?tl=zh-hans 參數，並提供一鍵切換功能。
+// @author       You
 // @match        https://www.reddit.com/*
 // @exclude      https://www.reddit.com/login*
 // @exclude      https://www.reddit.com/register*
@@ -157,11 +160,13 @@
     // 添加翻译参数
     function addTranslationParam(url) {
         const urlObj = new URL(url);
+        // 先移除可能存在的tl参数
+        urlObj.searchParams.delete('tl');
         urlObj.searchParams.set('tl', 'zh-hans');
         return urlObj.toString();
     }
 
-    // 检测翻译页面是否存在
+    // 检测翻译页面是否真正支持
     function checkTranslation() {
         // 如果已禁用，不执行检测
         if (!isEnabled) {
@@ -192,25 +197,114 @@
 
         const translatedUrl = addTranslationParam(currentUrl);
 
-        // 使用 GM_xmlhttpRequest 检测页面是否存在
+        // 使用 GM_xmlhttpRequest 进行实际验证测试
         GM_xmlhttpRequest({
-            method: 'HEAD',
+            method: 'GET',
             url: translatedUrl,
             onload: function(response) {
                 button.classList.remove('checking');
-                if (response.status === 200) {
-                    button.disabled = false;
-                    button.textContent = '切换到中文';
-                } else {
+                try {
+                    // 检查最终URL是否保持了tl=zh-hans参数
+                    const finalUrl = response.finalUrl || translatedUrl;
+                    const finalUrlObj = new URL(finalUrl);
+                    const hasTranslationParam = finalUrlObj.searchParams.get('tl') === 'zh-hans';
+
+                    // 检查响应状态
+                    const isValidStatus = response.status === 200;
+
+                    // 检查是否是真正支持翻译的页面
+                    // 通过检查页面内容中的关键特征来判断
+                    const pageContent = response.responseText;
+
+                    // 检查是否重定向到了错误页面
+                    const isNoThinkPage = (
+                        finalUrl.includes('/no_think') ||
+                        pageContent.includes('/no_think') ||
+                        pageContent.includes('no_think')
+                    );
+
+                    // 检查是否有网络错误
+                    const hasNetworkError = (
+                        response.status === 0 ||
+                        pageContent.includes('ERR_TUNNEL_CONNECTION_FAILED') ||
+                        pageContent.includes('net::ERR_')
+                    );
+
+                    // 检查是否是有效的Reddit帖子页面（包含帖子相关内容）
+                    const hasPostContent = (
+                        pageContent.includes('data-testid="post-container"') ||
+                        pageContent.includes('class="Post"') ||
+                        (pageContent.includes('post-title') && pageContent.includes('Comments'))
+                    );
+
+                    // 检查页面标题是否包含翻译标识
+                    const hasTranslationInTitle = (
+                        pageContent.includes('>Translated<') ||
+                        pageContent.includes('翻译') ||
+                        pageContent.includes('translated')
+                    );
+
+                    // 检查页面语言属性
+                    const hasChineseLangAttr = (
+                        pageContent.includes('lang="zh"') ||
+                        pageContent.includes('lang="zh-CN"') ||
+                        pageContent.includes('lang="zh-Hans"')
+                    );
+
+                    console.log('Translation check debug info:', {
+                        status: response.status,
+                        finalUrl: finalUrl,
+                        hasTranslationParam: hasTranslationParam,
+                        isNoThinkPage: isNoThinkPage,
+                        hasNetworkError: hasNetworkError,
+                        hasPostContent: hasPostContent,
+                        hasTranslationInTitle: hasTranslationInTitle,
+                        hasChineseLangAttr: hasChineseLangAttr
+                    });
+
+                    // 最严格的验证逻辑：
+                    // 1. 状态必须是200
+                    // 2. 必须保持翻译参数
+                    // 3. 不能是/no_think页面
+                    // 4. 不能有网络错误
+                    // 5. 必须包含帖子内容
+                    // 6. （可选）必须有翻译相关的标识
+                    const isActuallyTranslated = (
+                        isValidStatus &&
+                        hasTranslationParam &&
+                        !isNoThinkPage &&
+                        !hasNetworkError &&
+                        hasPostContent &&
+                        (hasTranslationInTitle || hasChineseLangAttr || pageContent.includes('tl=zh-hans'))
+                    );
+
+                    if (isActuallyTranslated) {
+                        button.disabled = false;
+                        button.textContent = '切换到中文';
+                    } else {
+                        button.disabled = true;
+                        button.textContent = '无中文版本';
+                    }
+                } catch (e) {
+                    console.error('Translation detection error:', e);
+                    button.classList.remove('checking');
                     button.disabled = true;
-                    button.textContent = '无中文版本';
+                    button.textContent = '检测失败';
                 }
             },
-            onerror: function() {
+            onerror: function(error) {
                 button.classList.remove('checking');
                 button.disabled = true;
                 button.textContent = '检测失败';
-            }
+                console.error('Translation detection network error:', error);
+            },
+            ontimeout: function() {
+                button.classList.remove('checking');
+                button.disabled = true;
+                button.textContent = '检测超时';
+                console.log('Translation detection timeout');
+            },
+            timeout: 15000 // 15秒超时
         });
     }
 
@@ -223,46 +317,40 @@
 
     // 初始化
     function init() {
+        // 等待body元素存在
+        if (!document.body) {
+            setTimeout(init, 100);
+            return;
+        }
+
         // 创建控制元素
         window.translationElements = createControlPanel();
 
         // 初始检测
         if (isEnabled) {
             // 等待页面完全加载后再检测
-            setTimeout(checkTranslation, 2000);
+            setTimeout(checkTranslation, 3000);
         }
 
-        // 监听URL变化
+        // 监听URL变化（使用更可靠的方案）
         let lastUrl = location.href;
-        const urlChangeObserver = new MutationObserver(() => {
+        const checkUrlChange = () => {
             const url = location.href;
             if (url !== lastUrl) {
                 lastUrl = url;
                 if (isEnabled) {
-                    setTimeout(checkTranslation, 1000);
+                    setTimeout(checkTranslation, 1500);
                 }
             }
-        });
-
-        urlChangeObserver.observe(document, { subtree: true, childList: true });
-
-        // 页面加载完成后再次检测
-        window.addEventListener('load', () => {
-            if (isEnabled) {
-                setTimeout(checkTranslation, 1000);
-            }
-        });
+            setTimeout(checkUrlChange, 500);
+        };
+        checkUrlChange();
     }
 
     // 等待DOM加载完成
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
-        // 确保在页面完全加载后初始化
-        if (document.body) {
-            init();
-        } else {
-            setTimeout(init, 100);
-        }
+        init();
     }
 })();
