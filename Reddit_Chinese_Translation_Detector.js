@@ -2,7 +2,8 @@
 // @name         Reddit Chinese Translation Detector
 // @namespace    http://tampermonkey.net/
 // @version      1.1
-// @description  Detect and navigate to Chinese translated Reddit posts
+// @description  Detect and navigate to Chinese translated Reddit posts. Automatically checks if Reddit posts support ?tl=zh-hans parameter and provides one-click switching.
+// @description:zh-CN  检测并导航到 Reddit 的中文翻译帖子。自动检查 Reddit 帖子是否支持中文翻译帖子，并提供一键切换功能。
 // @author       Will
 // @match        https://www.reddit.com/*
 // @exclude      https://www.reddit.com/login*
