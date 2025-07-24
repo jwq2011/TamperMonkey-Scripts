@@ -3,7 +3,7 @@
 // @name:zh-CN   Reddit 中文翻译检测器
 // @name:zh-TW   Reddit 中文翻譯檢測器
 // @namespace    http://tampermonkey.net/
-// @version      1.2.3
+// @version      1.3.0
 // @description  Detect and navigate to Chinese translated Reddit posts. Automatically checks if Reddit posts support ?tl=zh-hans parameter and provides one-click switching.
 // @description:zh-CN  检测并导航到 Reddit 的中文翻译帖子。自动检查 Reddit 帖子是否支持切换参数，并提供一键切换功能。
 // @description:zh-TW  檢測並導航到 Reddit 的中文翻譯貼文。自動檢查 Reddit 貼文是否支援切換參數，並提供一鍵切換功能。
@@ -22,6 +22,7 @@
 
     // 配置键名
     const CONFIG_KEY = 'reddit_chinese_translation_detector_enabled';
+    const POSITION_KEY = 'reddit_translation_button_position';
 
     // 检查是否已启用
     let isEnabled = localStorage.getItem(CONFIG_KEY) === 'true';
@@ -32,7 +33,7 @@
         #translation-toggle-container {
             position: fixed !important;
             top: 10px !important;
-            right: 10px !important;
+            left: 10px !important;
             z-index: 2147483647 !important;
             display: flex !important;
             gap: 10px !important;
@@ -44,6 +45,10 @@
             font-family: Arial, sans-serif !important;
             font-size: 14px !important;
             border: 1px solid #ccc !important;
+            cursor: move;
+            width: fit-content; /* 适应内容宽度 */
+            width: -moz-fit-content; /* Firefox兼容 */
+            user-select: none;
         }
 
         #translation-toggle-label {
@@ -96,7 +101,7 @@
         @media (max-width: 768px) {
             #translation-toggle-container {
                 top: 5px !important;
-                right: 5px !important;
+                left: 5px !important;
                 padding: 8px !important;
                 font-size: 12px !important;
                 max-width: 90vw !important;
@@ -121,6 +126,13 @@
         const container = document.createElement('div');
         container.id = 'translation-toggle-container';
 
+        // 设置保存的位置
+        const savedPosition = JSON.parse(localStorage.getItem(POSITION_KEY) || 'null');
+        if (savedPosition) {
+            container.style.left = savedPosition.x + 'px';
+            container.style.top = savedPosition.y + 'px';
+        }
+
         const label = document.createElement('span');
         label.id = 'translation-toggle-label';
         label.textContent = '翻译检测:';
@@ -140,6 +152,9 @@
         container.appendChild(button);
 
         document.body.appendChild(container);
+
+        // 添加拖拽功能
+        makeDraggable(container);
 
         // 事件监听
         toggle.addEventListener('change', function() {
@@ -162,6 +177,52 @@
         });
 
         return { toggle, button };
+    }
+
+    // 实现拖拽功能
+    function makeDraggable(element) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+
+        element.onmousedown = dragMouseDown;
+
+        function dragMouseDown(e) {
+            e = e || window.event;
+            // 只有在点击非按钮区域时才允许拖拽
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                e.preventDefault();
+                // 获取鼠标位置
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+        }
+
+        function elementDrag(e) {
+            e = e || window.event;
+            e.preventDefault();
+            // 计算新位置
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            // 设置元素新位置
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+        }
+
+        function closeDragElement() {
+            // 停止移动
+            document.onmouseup = null;
+            document.onmousemove = null;
+
+            // 保存位置到localStorage
+            const position = {
+                x: element.offsetLeft,
+                y: element.offsetTop
+            };
+            localStorage.setItem(POSITION_KEY, JSON.stringify(position));
+        }
     }
 
     // 添加翻译参数
