@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
 // @name         阿里云百炼模型到期时间提取器
-// @name:en      Bailian Model Expiry Extractor (Full Precision)
-// @namespace    https://github.com/your-username
-// @version      0.9.0
+// @name:en      Bailian Model Expiry Extractor
+// @namespace    https://github.com/jwq2011/
+// @version      0.9.1
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
 // @license      MIT
-// @homepage     https://github.com/your-username/bailian-expiry-extractor
-// @supportURL   https://github.com/your-username/bailian-expiry-extractor/issues
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts.git
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts.git/issues
 // @match        https://bailian.console.aliyun.com/console*
 // @grant        GM_setClipboard
 // @run-at       document-end
@@ -89,25 +89,37 @@
                            row.querySelector('td:first-child .text');
             const name = (nameEl?.textContent || '未知模型').trim();
 
-            // --- Code 提取（增强）---
+            // --- Code 提取（精准从 DOM 中查找）---
             let code = '';
             const text = row.textContent;
 
-            // 优先从文本中提取标准 Code
-            const codeMatch = text.match(/\b(qwen-(?:plus|turbo|max|vl-plus|audio-plus|3|14b|8b|4b|1\.7b|0\.6b|32b|30b|235b))\b/i);
-            if (codeMatch) {
-                code = codeMatch[1].toLowerCase();
-            } else {
-                // 尝试从 span 中找类似 qwen-xxx 的标识
-                const spans = row.querySelectorAll('span');
-                for (const span of spans) {
-                    const m = span.textContent.match(/\bqwen-\S+/i);
-                    if (m) {
-                        code = m[0].replace(/[^\w-]/g, '').toLowerCase();
-                        break;
-                    }
+            // 查找所有 span，找内容匹配 qwen-xxx 的
+            const spans = row.querySelectorAll('span');
+            for (const span of spans) {
+                const text = span.textContent.trim();
+                // 匹配 qwen 开头的标识符，如 qwen3-235b-a22b-thinking-2507
+                if (/^qwen[-\w]*\d/.test(text)) {
+                    code = text.toLowerCase();
+                    break;
                 }
             }
+
+            // 清理：确保是标准格式（可选）
+            // 例如：qwen3-235b-a22b-thinking-2507 → 可保留原样，或简化为 qwen-235b
+            // 如果你希望简化，取消下面注释：
+            /*
+            if (code.includes('235b')) code = 'qwen-235b';
+            else if (code.includes('30b')) code = 'qwen-30b';
+            else if (code.includes('32b')) code = 'qwen-32b';
+            else if (code.includes('14b')) code = 'qwen-14b';
+            else if (code.includes('8b')) code = 'qwen-8b';
+            else if (code.includes('4b')) code = 'qwen-4b';
+            else if (code.includes('1.7b')) code = 'qwen-1.7b';
+            else if (code.includes('0.6b')) code = 'qwen-0.6b';
+            else if (code.includes('plus')) code = 'qwen-plus';
+            else if (code.includes('turbo')) code = 'qwen-turbo';
+            else if (code.includes('qwen3')) code = 'qwen3';
+            */
             code = code || '—';
 
             // --- 免费额度提取（支持多种格式）---
