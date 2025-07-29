@@ -2,13 +2,13 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @namespace    https://github.com/jwq2011/
-// @version      1.1.0
+// @version      1.1.1
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
 // @license      MIT
-// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts.git
-// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts.git/issues
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
 // @match        https://bailian.console.aliyun.com/console*
 // @grant        GM_setClipboard
 // @run-at       document-end
