@@ -1,7 +1,9 @@
 // ==UserScript==
-// @name         表格提取与多格式导出工具（增强版）
+// @name         Table Extraction and Multi Format Export Tool (Enhanced Version)
+// @name:en      Table Extraction and Multi Format Export Tool (Enhanced Version)
+// @name:zh-CN   表格提取与多格式导出工具（增强版）
 // @namespace    http://tampermonkey.net/
-// @version      1.6.4
+// @version      1.6.5
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @author       Will
 // @match        *://*/*
@@ -14,6 +16,8 @@
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
 // @license      MIT
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
 // ==/UserScript==
 
 (function () {

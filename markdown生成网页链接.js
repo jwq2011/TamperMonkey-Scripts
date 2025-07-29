@@ -1,13 +1,15 @@
 ﻿// ==UserScript==
 // @name         markdown生成网页链接（右键触发）
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.1.1
 // @description  右键点击时生成当前页面的Markdown链接并复制到剪贴板
 // @author       Will
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        clipboard.writeText
 // @grant        GM_notification
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
 // ==/UserScript==
 
 (function () {
