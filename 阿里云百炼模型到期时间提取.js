@@ -1,17 +1,16 @@
 ﻿// ==UserScript==
 // @name         阿里云百炼模型到期时间提取器
-// @name:en      Bailian Model Expiry Extractor (Ultimate Stable)
+// @name:en      Bailian Model Expiry Extractor (Full Precision)
 // @namespace    https://github.com/your-username
-// @version      0.7.0
+// @version      0.9.0
 // @author       will
-// @description  无视页面结构变化，直接从当前 DOM 提取模型名称、Code、免费额度、倒计时、到期时间，支持一键复制 Code。
-// @description:en Extract model name, code, quota, countdown, expiry from current DOM, copy code with one click.
+// @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
+// @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
 // @license      MIT
 // @homepage     https://github.com/your-username/bailian-expiry-extractor
 // @supportURL   https://github.com/your-username/bailian-expiry-extractor/issues
 // @match        https://bailian.console.aliyun.com/console*
 // @grant        GM_setClipboard
-// @grant        GM_addStyle
 // @run-at       document-end
 // @compatible   tampermonkey
 // @compatible   violentmonkey
@@ -27,10 +26,9 @@
         if (DEBUG) console.log(LOG_PREFIX, ...args);
     }
 
-    // 存储提取结果
     let extractedData = [];
 
-    // 创建浮动按钮
+    // 创建按钮
     function createFloatingButton() {
         const btnId = 'bailian-extractor-btn';
         if (document.getElementById(btnId)) return;
@@ -38,23 +36,13 @@
         const button = document.createElement('button');
         button.id = btnId;
         Object.assign(button.style, {
-            position: 'fixed',
-            top: '80px',
-            right: '20px',
-            zIndex: '2147483647',
-            backgroundColor: '#ff6a00',
-            color: 'white',
-            border: 'none',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            opacity: 0.95,
-            fontFamily: 'Arial, sans-serif',
+            position: 'fixed', top: '80px', right: '20px', zIndex: '2147483647',
+            backgroundColor: '#ff6a00', color: 'white', border: 'none',
+            padding: '12px 16px', borderRadius: '8px', cursor: 'pointer',
+            fontSize: '14px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            opacity: 0.95, fontFamily: 'Arial, sans-serif'
         });
-        button.textContent = '🔄 提取模型信息';
+        button.textContent = '📊 提取模型信息';
 
         button.addEventListener('click', () => {
             button.disabled = true;
@@ -68,7 +56,7 @@
                     showResultsModal();
                 }
                 button.disabled = false;
-                button.textContent = '🔄 提取模型信息';
+                button.textContent = '📊 提取模型信息';
             }, 500);
         });
 
@@ -76,93 +64,94 @@
         log('✅ 按钮已创建');
     }
 
-    // 核心提取函数
+    // 提取所有模型
     function extractAllModels() {
-        log('🔍 开始提取所有模型...');
+        log('🔍 开始提取模型数据...');
 
-        // 尝试多种表格行选择器
-        const rowSelectors = [
-            'tr[data-row-key]',
-            '.ant-table-row',
-            'tr[role="row"]',
-            '.table-row', // 自定义类
-        ];
-
+        const rowSelectors = ['tr[data-row-key]', '.ant-table-row', 'tr[role="row"]'];
         let rows = [];
         for (const sel of rowSelectors) {
             rows = [...document.querySelectorAll(sel)];
-            if (rows.length > 0) {
-                log('✅ 使用选择器:', sel);
-                break;
-            }
+            if (rows.length > 0) break;
         }
 
         if (rows.length === 0) {
-            log('❌ 未找到任何行，请检查页面是否加载完成');
+            log('❌ 未找到任何行');
             return [];
         }
-
-        log('📊 找到', rows.length, '行');
 
         const results = [];
 
         for (const row of rows) {
-            // === 1. 提取模型名称 ===
+            // --- 模型名称 ---
             const nameEl = row.querySelector('.name__QVnRn') ||
                            row.querySelector('.model-name') ||
-                           row.querySelector('td:first-child .text') ||
-                           row.cells[0];
+                           row.querySelector('td:first-child .text');
             const name = (nameEl?.textContent || '未知模型').trim();
 
-            // === 2. 提取 Code（通常在第二列或隐藏字段）===
+            // --- Code 提取（增强）---
             let code = '';
-            const textContent = row.textContent;
+            const text = row.textContent;
 
-            // 常见 Code 模式匹配
-            const codeMatch = textContent.match(/\b(qwen-(?:plus|turbo|max|vl-plus|audio-plus|3))\b/i);
+            // 优先从文本中提取标准 Code
+            const codeMatch = text.match(/\b(qwen-(?:plus|turbo|max|vl-plus|audio-plus|3|14b|8b|4b|1\.7b|0\.6b|32b|30b|235b))\b/i);
             if (codeMatch) {
-                code = codeMatch[1];
+                code = codeMatch[1].toLowerCase();
             } else {
-                // 尝试从属性或隐藏 span 中找
-                const codeSpan = [...row.querySelectorAll('span')].find(s =>
-                    /\bqwen-/i.test(s.textContent)
-                );
-                code = codeSpan?.textContent.trim() || '';
-            }
-
-            // === 3. 提取免费额度和到期时间 ===
-            let freeQuota = '0/0';
-            let expiry = null;
-
-            const cellTexts = [...row.querySelectorAll('td')].map(td => td.textContent);
-
-            for (const text of cellTexts) {
-                const quotaMatch = text.match(/(\d+)\/(\d+).*?免费额度/);
-                if (quotaMatch) {
-                    freeQuota = `${quotaMatch[1]}/${quotaMatch[2]}`;
-                }
-
-                const expiryMatch = text.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
-                if (expiryMatch && expiryMatch[1] !== '-') {
-                    expiry = expiryMatch[1];
+                // 尝试从 span 中找类似 qwen-xxx 的标识
+                const spans = row.querySelectorAll('span');
+                for (const span of spans) {
+                    const m = span.textContent.match(/\bqwen-\S+/i);
+                    if (m) {
+                        code = m[0].replace(/[^\w-]/g, '').toLowerCase();
+                        break;
+                    }
                 }
             }
+            code = code || '—';
 
-            // 只有到期时间有效才保留
-            if (!expiry) continue;
+            // --- 免费额度提取（支持多种格式）---
+            let freeQuota = '0'; // 默认为 0
+            const quotaText = text;
 
-            const daysLeft = Math.ceil((new Date(expiry) - new Date().setHours(0, 0, 0, 0)) / 86400000);
-            if (daysLeft < 0) continue; // 过期的也跳过
+            // 匹配 “30,893/1,000,000” 格式
+            const ratioMatch = quotaText.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]+)/);
+            if (ratioMatch) {
+                const used = parseInt(ratioMatch[1].replace(/,/g, ''));
+                const total = parseInt(ratioMatch[2].replace(/,/g, ''));
+                freeQuota = `${used.toLocaleString()}/${total.toLocaleString()}`;
+            } else {
+                // 匹配百分比：如 “3.09%”
+                const percentMatch = quotaText.match(/(\d+(\.\d+)?%)/);
+                if (percentMatch) {
+                    freeQuota = percentMatch[1];
+                }
+                // 匹配 “无免费额度” → 显示为 0
+                else if (/无免费额度/.test(quotaText)) {
+                    freeQuota = '0';
+                }
+            }
+
+            // --- 到期时间 ---
+            const expiryMatch = text.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
+            if (!expiryMatch) continue;
+
+            const expiry = expiryMatch[1];
+            const expiryDate = new Date(expiry);
+            const today = new Date().setHours(0, 0, 0, 0);
+            const daysLeft = Math.ceil((expiryDate - today) / 86400000);
+
+            if (daysLeft < 0) continue; // 跳过已过期
 
             results.push({
                 name,
-                code: code || '—',
+                code,
                 freeQuota,
                 daysLeft,
                 expiry
             });
 
-            log('✅ 提取:', name, code, freeQuota, expiry, `剩余 ${daysLeft} 天`);
+            log('✅ 提取:', name, code, freeQuota, `剩余 ${daysLeft} 天`, expiry);
         }
 
         return results.sort((a, b) => a.daysLeft - b.daysLeft);
@@ -171,36 +160,24 @@
     // 显示结果
     function showResultsModal() {
         const modalId = 'bailian-extractor-modal';
-        if (document.getElementById(modalId)) {
-            document.body.removeChild(document.getElementById(modalId));
-        }
+        if (document.getElementById(modalId)) document.body.removeChild(document.getElementById(modalId));
 
         const modal = document.createElement('div');
         modal.id = modalId;
         Object.assign(modal.style, {
-            position: 'fixed',
-            top: 0, left: 0, width: '100%', height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: '2147483647',
-            fontFamily: 'Arial, sans-serif',
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: '2147483647', fontFamily: 'Arial, sans-serif'
         });
 
         const content = document.createElement('div');
         Object.assign(content.style, {
-            backgroundColor: 'white',
-            width: '95%', maxWidth: '1000px',
-            maxHeight: '85vh',
-            overflow: 'auto',
-            borderRadius: '10px',
-            padding: '20px',
-            position: 'relative',
+            backgroundColor: 'white', width: '95%', maxWidth: '1000px', maxHeight: '85vh',
+            overflow: 'auto', borderRadius: '10px', padding: '20px', position: 'relative'
         });
 
         const title = document.createElement('h3');
-        title.textContent = '✅ 提取结果（共 ' + extractedData.length + ' 个）';
+        title.textContent = `✅ 提取结果（${extractedData.length} 个模型）`;
         content.appendChild(title);
 
         if (extractedData.length === 0) {
@@ -226,39 +203,10 @@
             extractedData.forEach(item => {
                 const tr = document.createElement('tr');
 
-                // 模型名称
                 appendCell(tr, item.name);
-
-                // Code（可复制）
-                const codeCell = document.createElement('td');
-                codeCell.style.padding = '10px';
-                codeCell.style.border = '1px solid #ddd';
-                codeCell.style.cursor = 'pointer';
-                codeCell.style.color = '#007cba';
-                codeCell.style.fontWeight = 'bold';
-                codeCell.title = '点击复制 Code';
-                codeCell.textContent = item.code;
-                codeCell.onclick = () => {
-                    GM_setClipboard(item.code);
-                    codeCell.textContent = '✅ 已复制！';
-                    setTimeout(() => codeCell.textContent = item.code, 1500);
-                };
-                tr.appendChild(codeCell);
-
-                // 免费额度
+                appendCodeCell(tr, item.code);
                 appendCell(tr, item.freeQuota);
-
-                // 倒计时
-                const countdownCell = document.createElement('td');
-                countdownCell.style.padding = '10px';
-                countdownCell.style.border = '1px solid #ddd';
-                countdownCell.style.fontWeight = 'bold';
-                countdownCell.style.color = item.daysLeft < 30 ? '#d9534f' :
-                                          item.daysLeft < 90 ? '#f0ad4e' : '#5cb85c';
-                countdownCell.textContent = `剩余 ${item.daysLeft} 天`;
-                tr.appendChild(countdownCell);
-
-                // 到期时间
+                appendCountdownCell(tr, item.daysLeft);
                 appendCell(tr, item.expiry, { color: '#d9534f', fontWeight: 'bold' });
 
                 tbody.appendChild(tr);
@@ -285,7 +233,7 @@
                         d.freeQuota,
                         `剩余 ${d.daysLeft} 天`,
                         d.expiry
-                    ].map(s => `"${String(s).replace(/"/g, '""')}"`).join(','))
+                    ].map(escapeCsv).join(','))
                 ].join('\n');
                 navigator.clipboard.writeText(csv).then(() => {
                     csvBtn.textContent = '✅ 已复制！';
@@ -297,11 +245,8 @@
 
         const close = document.createElement('span');
         close.textContent = '×';
-        close.style.position = 'absolute';
-        close.style.top = '10px';
-        close.style.right = '16px';
-        close.style.fontSize = '24px';
-        close.style.cursor = 'pointer';
+        close.style.position = 'absolute'; close.style.top = '10px'; close.style.right = '16px';
+        close.style.fontSize = '24px'; close.style.cursor = 'pointer';
         close.onclick = () => document.body.removeChild(modal);
         content.appendChild(close);
 
@@ -318,14 +263,42 @@
         tr.appendChild(td);
     }
 
+    function appendCodeCell(tr, code) {
+        const td = document.createElement('td');
+        td.style.padding = '10px';
+        td.style.border = '1px solid #ddd';
+        td.style.cursor = 'pointer';
+        td.style.color = '#007cba';
+        td.style.fontWeight = 'bold';
+        td.title = '点击复制 Code';
+        td.textContent = code;
+        td.onclick = () => {
+            GM_setClipboard(code);
+            td.textContent = '✅ 已复制！';
+            setTimeout(() => td.textContent = code, 1500);
+        };
+        tr.appendChild(td);
+    }
+
+    function appendCountdownCell(tr, daysLeft) {
+        const td = document.createElement('td');
+        td.style.padding = '10px';
+        td.style.border = '1px solid #ddd';
+        td.style.fontWeight = 'bold';
+        td.style.color = daysLeft < 30 ? '#d9534f' :
+                        daysLeft < 90 ? '#f0ad4e' : '#5cb85c';
+        td.textContent = `剩余 ${daysLeft} 天`;
+        tr.appendChild(td);
+    }
+
+    function escapeCsv(text) {
+        return `"${String(text).replace(/"/g, '""')}"`;
+    }
+
     // 初始化
     function init() {
         console.log(LOG_PREFIX, '脚本已注入，版本:', GM_info.script.version);
-
-        // 延迟执行，确保 DOM 加载
-        setTimeout(() => {
-            createFloatingButton();
-        }, 1000);
+        setTimeout(createFloatingButton, 1000);
     }
 
     init();
