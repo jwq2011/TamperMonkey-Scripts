@@ -2,7 +2,7 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @namespace    https://github.com/jwq2011/
-// @version      1.0.0
+// @version      1.1.0
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -83,8 +83,8 @@
         for (const row of rows) {
             // --- 模型名称 ---
             const nameEl = row.querySelector('.name__QVnRn') ||
-                           row.querySelector('.model-name') ||
-                           row.querySelector('td:first-child .text');
+                row.querySelector('.model-name') ||
+                row.querySelector('td:first-child .text');
             const name = (nameEl?.textContent || '未知模型').trim();
 
             // --- 精准提取 Code ---
@@ -99,26 +99,59 @@
             }
             code = code || '—';
 
-            // --- 免费额度 ---
-            let freeQuota = '0';
-            const text = row.textContent;
+            // --- 免费额度：数值 + 百分比（精准提取）---
+            let freeQuota = '—';
+            let quotaText = '0';
+            let percentText = '0%';
 
-            const ratioMatch = text.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]+)/);
-            if (ratioMatch) {
-                const used = parseInt(ratioMatch[1].replace(/,/g, ''));
-                const total = parseInt(ratioMatch[2].replace(/,/g, ''));
-                freeQuota = `${used.toLocaleString()}/${total.toLocaleString()}`;
-            } else {
-                const percentMatch = text.match(/(\d+(\.\d+)?%)/);
-                if (percentMatch) {
-                    freeQuota = percentMatch[1];
-                } else if (/无免费额度/.test(text)) {
-                    freeQuota = '0';
+            // 1. 提取额度数值（如 30,893/1,000,000）
+            const quotaSpan = row.querySelector('.value__V7Z7e');
+            if (quotaSpan) {
+                const text = quotaSpan.textContent.trim();
+                const match = text.match(/(\d[\d,]*)\s*\/\s*(\d[\d,]+)/);
+                if (match) {
+                    const used = parseInt(match[1].replace(/,/g, ''));
+                    const total = parseInt(match[2].replace(/,/g, ''));
+                    quotaText = `${used.toLocaleString()}/${total.toLocaleString()}`;
                 }
             }
 
+            // 2. 精准提取百分比：查找 title 或 textContent 包含 % 的 progress-text
+            let percentSpan = null;
+
+            // 优先：查找有 title 属性且包含 % 的
+            const allPercentSpans = row.querySelectorAll('.efm_ant-progress-text');
+            for (const span of allPercentSpans) {
+                const title = span.getAttribute('title');
+                if (title && /^\d+(\.\d+)?%$/.test(title)) {
+                    percentText = title;
+                    break;
+                }
+                const text = span.textContent.trim();
+                if (/^\d+(\.\d+)?%$/.test(text)) {
+                    percentText = text;
+                }
+            }
+
+            // 3. 如果仍无有效值，尝试 fallback
+            if (quotaText !== '0') {
+                const used = parseInt(quotaText.split('/')[0].replace(/,/g, ''));
+                const total = parseInt(quotaText.split('/')[1].replace(/,/g, ''));
+                const pct = total > 0 ? (used / total * 100).toFixed(2) + '%' : '0%';
+                percentText = pct;
+            }
+
+            // 4. 组合显示
+            if (quotaText !== '0') {
+                freeQuota = `${quotaText} · ${percentText}`;
+            } else if (/^\d+(\.\d+)?%$/.test(percentText)) {
+                freeQuota = percentText;
+            } else {
+                freeQuota = /无免费额度/.test(row.textContent) ? '0 · 0%' : '—';
+            }
+
             // --- 到期时间 ---
-            const expiryMatch = text.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
+            const expiryMatch = row.textContent.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
             if (!expiryMatch) continue;
 
             const expiry = expiryMatch[1];
@@ -133,6 +166,7 @@
 
         return results.sort((a, b) => a.daysLeft - b.daysLeft);
     }
+
 
     function showResultsModal() {
         const modalId = 'bailian-extractor-modal';
