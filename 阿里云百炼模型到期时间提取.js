@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
-// @name         Bailian Model Expiry Extractor
-// @name:zh-CN   阿里云百炼模型到期时间提取器
+// @name         阿里云百炼模型到期时间提取器
+// @name:en      Bailian Model Expiry Extractor
 // @namespace    https://github.com/jwq2011/
-// @version      1.1.2
+// @version      1.3.0
 // @author       will
-// @description Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
-// @description:zh-CN  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
+// @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
+// @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
 // @license      MIT
-// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
-// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts.git
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts.git/issues
 // @match        https://bailian.console.aliyun.com/console*
 // @grant        GM_setClipboard
 // @run-at       document-end
@@ -19,7 +19,7 @@
 (function () {
     'use strict';
 
-    const DEBUG = true;
+    const DEBUG = false;
     const LOG_PREFIX = '[Bailian Expiry+]';
 
     function log(...args) {
@@ -46,6 +46,20 @@
         button.addEventListener('click', () => {
             button.disabled = true;
             button.textContent = '🔍 提取中...';
+
+            let needWait = false;
+
+            // 自动切换视图
+            if (switchToListView()) {
+                needWait = true;
+            }
+
+            // 自动展开折叠区域
+            if (autoExpandFoldedRows()) {
+                needWait = true;
+            }
+
+            // 等待 DOM 更新
             setTimeout(() => {
                 const data = extractAllModels();
                 if (data.length === 0) {
@@ -56,13 +70,51 @@
                 }
                 button.disabled = false;
                 button.textContent = '📊 提取模型信息';
-            }, 500);
+            }, needWait ? 1200 : 500);
         });
 
         document.body.appendChild(button);
         log('✅ 按钮已创建');
     }
 
+    // 自动切换到列表视图（精准判断）
+    function switchToListView() {
+        // 判断是否已经是列表视图
+        const isListView = document.querySelector('.bl-icon-list-line.active__VRFfX');
+        if (isListView) {
+            log('✅ 当前已是列表视图');
+            return false;
+        }
+
+        // 否则，点击列表图标切换
+        const listViewIcon = document.querySelector('.bl-icon-list-line');
+        const button = listViewIcon?.closest('button');
+
+        if (button && button.offsetWidth > 0 && button.offsetHeight > 0) {
+            button.click();
+            log('✅ 已切换到列表视图');
+            return true;
+        }
+
+        log('⚠️ 未找到“切换到列表视图”按钮');
+        return false;
+    }
+
+    // 自动展开折叠区域
+    function autoExpandFoldedRows() {
+        const expandButtons = [...document.querySelectorAll('button[aria-label="展开"], button[title="展开"]')];
+        let clicked = false;
+        for (const btn of expandButtons) {
+            if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                btn.click();
+                clicked = true;
+                log('✅ 点击展开按钮');
+            }
+        }
+        return clicked;
+    }
+
+    // 提取模型信息
     function extractAllModels() {
         log('🔍 开始提取模型数据...');
 
@@ -82,9 +134,8 @@
 
         for (const row of rows) {
             // --- 模型名称 ---
-            const nameEl = row.querySelector('.name__QVnRn') ||
-                row.querySelector('.model-name') ||
-                row.querySelector('td:first-child .text');
+            const nameContainer = row.querySelector('.model-name__xEkXf');
+            const nameEl = nameContainer?.querySelector('span'); // 只取 span 内容
             const name = (nameEl?.textContent || '未知模型').trim();
 
             // --- 精准提取 Code ---
@@ -99,12 +150,11 @@
             }
             code = code || '—';
 
-            // --- 免费额度：数值 + 百分比（精准提取）---
+            // --- 免费额度：数值 + 百分比 ---
             let freeQuota = '—';
             let quotaText = '0';
             let percentText = '0%';
 
-            // 1. 提取额度数值（如 30,893/1,000,000）
             const quotaSpan = row.querySelector('.value__V7Z7e');
             if (quotaSpan) {
                 const text = quotaSpan.textContent.trim();
@@ -116,32 +166,14 @@
                 }
             }
 
-            // 2. 精准提取百分比：查找 title 或 textContent 包含 % 的 progress-text
-            let percentSpan = null;
-
-            // 优先：查找有 title 属性且包含 % 的
-            const allPercentSpans = row.querySelectorAll('.efm_ant-progress-text');
-            for (const span of allPercentSpans) {
-                const title = span.getAttribute('title');
-                if (title && /^\d+(\.\d+)?%$/.test(title)) {
-                    percentText = title;
-                    break;
-                }
-                const text = span.textContent.trim();
-                if (/^\d+(\.\d+)?%$/.test(text)) {
-                    percentText = text;
+            const percentSpan = row.querySelector('.efm_ant-progress-text');
+            if (percentSpan) {
+                const pct = percentSpan.textContent.trim();
+                if (/^\d+(\.\d+)?%$/.test(pct)) {
+                    percentText = pct;
                 }
             }
 
-            // 3. 如果仍无有效值，尝试 fallback
-            if (quotaText !== '0') {
-                const used = parseInt(quotaText.split('/')[0].replace(/,/g, ''));
-                const total = parseInt(quotaText.split('/')[1].replace(/,/g, ''));
-                const pct = total > 0 ? (used / total * 100).toFixed(2) + '%' : '0%';
-                percentText = pct;
-            }
-
-            // 4. 组合显示
             if (quotaText !== '0') {
                 freeQuota = `${quotaText} · ${percentText}`;
             } else if (/^\d+(\.\d+)?%$/.test(percentText)) {
@@ -167,7 +199,7 @@
         return results.sort((a, b) => a.daysLeft - b.daysLeft);
     }
 
-
+    // 显示结果弹窗
     function showResultsModal() {
         const modalId = 'bailian-extractor-modal';
         if (document.getElementById(modalId)) document.body.removeChild(document.getElementById(modalId));
@@ -261,6 +293,7 @@
         document.body.appendChild(modal);
     }
 
+    // 工具函数：创建表格单元格
     function appendCell(tr, text, style = {}) {
         const td = document.createElement('td');
         td.style.padding = '10px';
@@ -298,6 +331,7 @@
         tr.appendChild(td);
     }
 
+    // 初始化
     function init() {
         console.log(LOG_PREFIX, '脚本已注入，版本:', GM_info.script.version);
         setTimeout(createFloatingButton, 1000);
