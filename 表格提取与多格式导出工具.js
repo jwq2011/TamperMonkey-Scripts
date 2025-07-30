@@ -1,11 +1,9 @@
 // ==UserScript==
-// @name         表格提取与多格式导出工具（增强版）
-// @name:en      Table Extraction and Multi Format Export Tool (Enhanced Version)
+// @name         Table Extraction and Multi Format Export Tool (Enhanced Version)
 // @name:zh-CN   表格提取与多格式导出工具（增强版）
 // @namespace    http://tampermonkey.net/
-// @version      1.6.6
-// @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
-// @description:en  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names.
+// @version      1.6.7
+// @description  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names.
 // @description:zh-CN 自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @author       Will
 // @match        *://*/*
