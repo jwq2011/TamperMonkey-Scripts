@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name:        Bailian Model Expiry Extractor
+// @name         Bailian Model Expiry Extractor
 // @name:zh-CN   阿里云百炼模型到期时间提取器
 // @namespace    https://greasyfork.org/zh-CN/scripts/543956-bailian-model-expiry-extractor
 // @version      1.3.3
