@@ -134,6 +134,7 @@
         const isSubPage = /\/model-market\/detail\//.test(location.hash);
 
         for (const row of rows) {
+            // --- 模型名称 ---
             let name = '未知模型';
             if (isSubPage) {
                 const nameEl = row.querySelector('.name__QVnRn') || row.querySelector('td:first-child');
@@ -144,17 +145,27 @@
                 name = (nameEl?.textContent || '未知模型').trim();
             }
 
+            // --- Code 提取 ---
             let code = '';
-            const spans = row.querySelectorAll('span');
-            for (const span of spans) {
-                const text = span.textContent.trim();
-                if (/^qwen[-\w]*\d/.test(text)) {
-                    code = text.toLowerCase();
-                    break;
+            if (isSubPage) {
+                const spans = row.querySelectorAll('span');
+                for (const span of spans) {
+                    const text = span.textContent.trim();
+                    if (/^qwen[-\w]*\d/.test(text)) {
+                        code = text.toLowerCase();
+                        break;
+                    }
+                }
+            } else {
+                const codeCell = row.querySelector('td:nth-child(2)');
+                const codeText = codeCell?.textContent.trim().split(/\s+/)[0] || '';
+                if (/^qwen[-\w]*\d/.test(codeText)) {
+                    code = codeText.toLowerCase();
                 }
             }
             code = code || '—';
 
+            // --- 免费额度 ---
             let freeQuota = '—';
             let quotaText = '0';
             let percentText = '0%';
@@ -186,6 +197,7 @@
                 freeQuota = /无免费额度/.test(row.textContent) ? '0 · 0%' : '—';
             }
 
+            // --- 到期时间 ---
             const expiryMatch = row.textContent.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
             if (!expiryMatch) continue;
 
