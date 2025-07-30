@@ -2,7 +2,7 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @namespace    https://greasyfork.org/zh-CN/scripts/543956-bailian-model-expiry-extractor
-// @version      1.3.3
+// @version      1.3.4
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en  Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -131,14 +131,19 @@
         }
 
         const results = [];
+        const isSubPage = /\/model-market\/detail\//.test(location.hash);
 
         for (const row of rows) {
-            // --- 模型名称 ---
-            const nameContainer = row.querySelector('.model-name__xEkXf');
-            const nameEl = nameContainer?.querySelector('span'); // 只取 span 内容
-            const name = (nameEl?.textContent || '未知模型').trim();
+            let name = '未知模型';
+            if (isSubPage) {
+                const nameEl = row.querySelector('.name__QVnRn') || row.querySelector('td:first-child');
+                name = (nameEl?.textContent || '未知模型').trim();
+            } else {
+                const nameContainer = row.querySelector('.model-name__xEkXf');
+                const nameEl = nameContainer?.querySelector('span');
+                name = (nameEl?.textContent || '未知模型').trim();
+            }
 
-            // --- 精准提取 Code ---
             let code = '';
             const spans = row.querySelectorAll('span');
             for (const span of spans) {
@@ -150,7 +155,6 @@
             }
             code = code || '—';
 
-            // --- 免费额度：数值 + 百分比 ---
             let freeQuota = '—';
             let quotaText = '0';
             let percentText = '0%';
@@ -182,7 +186,6 @@
                 freeQuota = /无免费额度/.test(row.textContent) ? '0 · 0%' : '—';
             }
 
-            // --- 到期时间 ---
             const expiryMatch = row.textContent.match(/到期时间.?(\d{4}-\d{2}-\d{2})/);
             if (!expiryMatch) continue;
 
