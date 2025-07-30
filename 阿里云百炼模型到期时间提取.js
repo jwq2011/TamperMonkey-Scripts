@@ -2,7 +2,7 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @namespace    https://github.com/jwq2011/
-// @version      1.4.1
+// @version      1.4.2
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -39,6 +39,17 @@
         showVendor: false,        // 供应商（子页面无）
         showUpdateTime: false,     // 更新时间（子页面无）
     };
+
+    (function loadUserSettings() {
+        try {
+            const saved = localStorage.getItem('bailian_user_settings');
+            if (saved) {
+                userSettings = { ...userSettings, ...JSON.parse(saved) };
+            }
+        } catch (e) {
+            console.error('[Bailian Settings] 加载用户设置失败:', e);
+        }
+    })();
 
     function createFloatingButton() {
         const btnId = 'bailian-extractor-btn';
@@ -86,6 +97,9 @@
         });
 
         document.body.appendChild(button);
+
+        createSettingsPanel(); // 添加设置按钮
+
         log('✅ 按钮已创建');
     }
 
@@ -416,6 +430,120 @@
                         daysLeft < 90 ? '#f0ad4e' : '#5cb85c';
         td.textContent = `剩余 ${daysLeft} 天`;
         tr.appendChild(td);
+    }
+
+    // 创建设置按钮和弹窗
+function createSettingsPanel() {
+    const settingsBtnId = 'bailian-settings-btn';
+    if (document.getElementById(settingsBtnId)) return;
+
+    // 设置按钮
+    const settingsBtn = document.createElement('button');
+    settingsBtn.id = settingsBtnId;
+    Object.assign(settingsBtn.style, {
+        position: 'fixed', top: '140px', right: '20px', zIndex: '2147483646',
+        backgroundColor: '#4CAF50', color: 'white', border: 'none',
+        padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
+        fontSize: '16px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        opacity: 0.95, fontFamily: 'Arial, sans-serif'
+    });
+    settingsBtn.textContent = '⚙️ 设置';
+    settingsBtn.title = '点击打开设置面板';
+
+    settingsBtn.addEventListener('click', () => {
+        showSettingsModal();
+    });
+
+    document.body.appendChild(settingsBtn);
+    log('✅ 设置按钮已创建');
+}
+
+    // 显示设置弹窗
+    function showSettingsModal() {
+        const modalId = 'bailian-settings-modal';
+        if (document.getElementById(modalId)) document.body.removeChild(document.getElementById(modalId));
+
+        const modal = document.createElement('div');
+        modal.id = modalId;
+        Object.assign(modal.style, {
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: '2147483647', fontFamily: 'Arial, sans-serif'
+        });
+
+        const content = document.createElement('div');
+        Object.assign(content.style, {
+            backgroundColor: 'white', width: '90%', maxWidth: '500px', padding: '20px',
+            borderRadius: '10px', position: 'relative'
+        });
+
+        const title = document.createElement('h3');
+        title.textContent = '🔧 设置面板';
+        content.appendChild(title);
+
+        const form = document.createElement('div');
+        form.style.marginTop = '15px';
+
+        const fields = [
+            { key: 'showModelType', label: '显示模型类型' },
+            { key: 'showContextLength', label: '显示上下文长度' },
+            { key: 'showPrice', label: '显示价格' },
+            { key: 'showProtocol', label: '显示模型协议' },
+            { key: 'showLimit', label: '显示限流' },
+            { key: 'showDescription', label: '显示描述' },
+            { key: 'showVendor', label: '显示供应商（仅主页面）' },
+            { key: 'showUpdateTime', label: '显示更新时间（仅主页面）' }
+        ];
+
+        fields.forEach(field => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '12px';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `setting-${field.key}`;
+            checkbox.checked = userSettings[field.key];
+            checkbox.onchange = () => {
+                userSettings[field.key] = checkbox.checked;
+                localStorage.setItem('bailian_user_settings', JSON.stringify(userSettings));
+            };
+
+            const label = document.createElement('label');
+            label.htmlFor = `setting-${field.key}`;
+            label.textContent = field.label;
+            label.style.marginLeft = '8px';
+
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            form.appendChild(div);
+        });
+
+        content.appendChild(form);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '✅ 保存并关闭';
+        saveBtn.style.marginTop = '20px';
+        saveBtn.style.padding = '10px 16px';
+        saveBtn.style.backgroundColor = '#007cba';
+        saveBtn.style.color = 'white';
+        saveBtn.style.border = 'none';
+        saveBtn.style.borderRadius = '4px';
+        saveBtn.style.cursor = 'pointer';
+        saveBtn.onclick = () => {
+            document.body.removeChild(modal);
+            alert('✅ 设置已保存，下次提取时生效。');
+        };
+        content.appendChild(saveBtn);
+
+        const close = document.createElement('span');
+        close.textContent = '×';
+        close.style.position = 'absolute'; close.style.top = '10px'; close.style.right = '16px';
+        close.style.fontSize = '24px'; close.style.cursor = 'pointer';
+        close.onclick = () => document.body.removeChild(modal);
+        content.appendChild(close);
+
+        modal.appendChild(content);
+        document.body.appendChild(modal);
     }
 
     // 初始化
