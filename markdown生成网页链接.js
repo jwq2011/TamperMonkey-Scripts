@@ -1,10 +1,10 @@
 ﻿// ==UserScript==
-// @name:en      Generate webpage links through markdown (triggered by right-click)
 // @name         markdown生成网页链接（右键触发）
+// @name:en      Generate webpage links through markdown (triggered by right-click)
 // @namespace    http://tampermonkey.net/
 // @version      0.1.3
-// @description:en  Generate Markdown link for the current page when right-click and copy it to the clipboard
 // @description  右键点击时生成当前页面的Markdown链接并复制到剪贴板
+// @description:en  Generate Markdown link for the current page when right-click and copy it to the clipboard
 // @author       Will
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
