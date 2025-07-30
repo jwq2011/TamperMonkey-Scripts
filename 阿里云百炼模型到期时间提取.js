@@ -1,14 +1,14 @@
 ﻿// ==UserScript==
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
-// @namespace    https://greasyfork.org/zh-CN/scripts/543956-bailian-model-expiry-extractor
-// @version      1.3.4
+// @namespace    https://github.com/jwq2011/
+// @version      1.4.0
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
-// @description:en  Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
+// @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
 // @license      MIT
-// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
-// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
+// @homepage     https://github.com/jwq2011/TamperMonkey-Scripts.git
+// @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts.git/issues
 // @match        https://bailian.console.aliyun.com/console*
 // @grant        GM_setClipboard
 // @run-at       document-end
@@ -27,6 +27,18 @@
     }
 
     let extractedData = [];
+
+    // 用户可自定义显示哪些列（默认只显示原始5个）
+    const userSettings = {
+        showModelType: false,     // 模型类型
+        showContextLength: false, // 上下文长度
+        showPrice: false,          // 价格
+        showProtocol: false,      // 模型协议
+        showLimit: false,         // 限流
+        showDescription: false,    // 描述
+        showVendor: false,        // 供应商（子页面无）
+        showUpdateTime: false,     // 更新时间（子页面无）
+    };
 
     function createFloatingButton() {
         const btnId = 'bailian-extractor-btn';
@@ -131,6 +143,8 @@
         }
 
         const results = [];
+
+        // 判断是否是子页面（详情页）
         const isSubPage = /\/model-market\/detail\//.test(location.hash);
 
         for (const row of rows) {
@@ -165,7 +179,7 @@
             }
             code = code || '—';
 
-            // --- 免费额度 ---
+            // --- 免费额度 + 百分比 ---
             let freeQuota = '—';
             let quotaText = '0';
             let percentText = '0%';
@@ -207,7 +221,28 @@
             const daysLeft = Math.ceil((expiryDate - today) / 86400000);
             if (daysLeft < 0) continue;
 
-            results.push({ name, code, freeQuota, daysLeft, expiry });
+            // --- 可选字段 ---
+            const modelType = userSettings.showModelType ? (row.cells[2]?.textContent || '—') : undefined;
+            const contextLength = userSettings.showContextLength ? (row.cells[3]?.textContent || '—') : undefined;
+            const price = userSettings.showPrice ? (row.cells[4]?.textContent || '—') : undefined;
+            const protocol = userSettings.showProtocol ? (row.cells[5]?.textContent || '—') : undefined;
+            const limit = userSettings.showLimit ? (row.cells[6]?.textContent || '—') : undefined;
+            const description = userSettings.showDescription ? (row.cells[9]?.textContent || '—') : undefined;
+            const vendor = (userSettings.showVendor && !isSubPage) ? (row.cells[10]?.textContent || '—') : undefined;
+            const updateTime = (userSettings.showUpdateTime && !isSubPage) ? (row.cells[11]?.textContent || '—') : undefined;
+
+            results.push({
+                name, code, freeQuota, daysLeft, expiry,
+                ...(userSettings.showModelType && { modelType }),
+                ...(userSettings.showContextLength && { contextLength }),
+                ...(userSettings.showPrice && { price }),
+                ...(userSettings.showProtocol && { protocol }),
+                ...(userSettings.showLimit && { limit }),
+                ...(userSettings.showDescription && { description }),
+                ...(userSettings.showVendor && { vendor }),
+                ...(userSettings.showUpdateTime && { updateTime })
+            });
+
             log('✅ 提取:', name, code, freeQuota, `剩余 ${daysLeft} 天`, expiry);
         }
 
@@ -251,6 +286,14 @@
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">免费额度</th>
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">倒计时显示</th>
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">到期时间</th>
+                        ${userSettings.showModelType ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">模型类型</th>' : ''}
+                        ${userSettings.showContextLength ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">上下文长度</th>' : ''}
+                        ${userSettings.showPrice ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">价格</th>' : ''}
+                        ${userSettings.showProtocol ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">模型协议</th>' : ''}
+                        ${userSettings.showLimit ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">限流</th>' : ''}
+                        ${userSettings.showDescription ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">描述</th>' : ''}
+                        ${userSettings.showVendor ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">供应商</th>' : ''}
+                        ${userSettings.showUpdateTime ? '<th style="text-align:left;padding:10px;border:1px solid #ddd;">更新时间</th>' : ''}
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -264,6 +307,14 @@
                 appendCell(tr, item.freeQuota);
                 appendCountdownCell(tr, item.daysLeft);
                 appendCell(tr, item.expiry, { color: '#d9534f', fontWeight: 'bold' });
+                if (userSettings.showModelType) appendCell(tr, item.modelType || '—');
+                if (userSettings.showContextLength) appendCell(tr, item.contextLength || '—');
+                if (userSettings.showPrice) appendCell(tr, item.price || '—');
+                if (userSettings.showProtocol) appendCell(tr, item.protocol || '—');
+                if (userSettings.showLimit) appendCell(tr, item.limit || '—');
+                if (userSettings.showDescription) appendCell(tr, item.description || '—');
+                if (userSettings.showVendor) appendCell(tr, item.vendor || '—');
+                if (userSettings.showUpdateTime) appendCell(tr, item.updateTime || '—');
                 tbody.appendChild(tr);
             });
 
@@ -280,13 +331,30 @@
             csvBtn.style.cursor = 'pointer';
             csvBtn.onclick = () => {
                 const csv = [
-                    ['模型名称', 'Code', '免费额度', '倒计时显示', '到期时间'].join(','),
+                    ['模型名称', 'Code', '免费额度', '倒计时显示', '到期时间',
+                     ...(userSettings.showModelType ? ['模型类型'] : []),
+                     ...(userSettings.showContextLength ? ['上下文长度'] : []),
+                     ...(userSettings.showPrice ? ['价格'] : []),
+                     ...(userSettings.showProtocol ? ['模型协议'] : []),
+                     ...(userSettings.showLimit ? ['限流'] : []),
+                     ...(userSettings.showDescription ? ['描述'] : []),
+                     ...(userSettings.showVendor ? ['供应商'] : []),
+                     ...(userSettings.showUpdateTime ? ['更新时间'] : [])
+                    ].join(','),
                     ...extractedData.map(d => [
                         d.name,
                         d.code,
                         d.freeQuota,
                         `剩余 ${d.daysLeft} 天`,
-                        d.expiry
+                        d.expiry,
+                        ...(userSettings.showModelType ? [d.modelType || '—'] : []),
+                        ...(userSettings.showContextLength ? [d.contextLength || '—'] : []),
+                        ...(userSettings.showPrice ? [d.price || '—'] : []),
+                        ...(userSettings.showProtocol ? [d.protocol || '—'] : []),
+                        ...(userSettings.showLimit ? [d.limit || '—'] : []),
+                        ...(userSettings.showDescription ? [d.description || '—'] : []),
+                        ...(userSettings.showVendor ? [d.vendor || '—'] : []),
+                        ...(userSettings.showUpdateTime ? [d.updateTime || '—'] : [])
                     ].map(s => `"${String(s).replace(/"/g, '""')}"`).join(','))
                 ].join('\n');
                 navigator.clipboard.writeText(csv).then(() => {
