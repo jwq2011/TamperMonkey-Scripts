@@ -2,7 +2,7 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @namespace    https://github.com/jwq2011/
-// @version      1.4.0
+// @version      1.4.1
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -221,15 +221,17 @@
             const daysLeft = Math.ceil((expiryDate - today) / 86400000);
             if (daysLeft < 0) continue;
 
-            // --- 可选字段 ---
-            const modelType = userSettings.showModelType ? (row.cells[2]?.textContent || '—') : undefined;
-            const contextLength = userSettings.showContextLength ? (row.cells[3]?.textContent || '—') : undefined;
-            const price = userSettings.showPrice ? (row.cells[4]?.textContent || '—') : undefined;
-            const protocol = userSettings.showProtocol ? (row.cells[5]?.textContent || '—') : undefined;
-            const limit = userSettings.showLimit ? (row.cells[6]?.textContent || '—') : undefined;
-            const description = userSettings.showDescription ? (row.cells[9]?.textContent || '—') : undefined;
-            const vendor = (userSettings.showVendor && !isSubPage) ? (row.cells[10]?.textContent || '—') : undefined;
-            const updateTime = (userSettings.showUpdateTime && !isSubPage) ? (row.cells[11]?.textContent || '—') : undefined;
+            // --- 可选字段提取（使用 nth-child 精准定位）---
+            const modelType = userSettings.showModelType ? (row.querySelector('td:nth-child(3)')?.textContent || '—') : undefined;
+            const contextLength = userSettings.showContextLength ? (row.querySelector('td:nth-child(4)')?.textContent || '—') : undefined;
+            const price = userSettings.showPrice ? (row.querySelector('td:nth-child(5)')?.textContent || '—') : undefined;
+            const protocol = userSettings.showProtocol ? (row.querySelector('td:nth-child(6)')?.textContent || '—') : undefined;
+            const freeQuotaCol = row.querySelector('td:nth-child(7)')?.textContent || '—';
+            const autoStopCol = row.querySelector('td:nth-child(8)')?.textContent || '—';
+            const limit = userSettings.showLimit ? (row.querySelector('td:nth-child(9)')?.textContent || '—') : undefined;
+            const description = userSettings.showDescription ? (row.querySelector('td:nth-child(10)')?.textContent || '—') : undefined;
+            const vendor = (userSettings.showVendor && !isSubPage) ? (row.querySelector('td:nth-child(11)')?.textContent || '—') : undefined;
+            const updateTime = (userSettings.showUpdateTime && !isSubPage) ? (row.querySelector('td:nth-child(12)')?.textContent || '—') : undefined;
 
             results.push({
                 name, code, freeQuota, daysLeft, expiry,
@@ -264,7 +266,7 @@
 
         const content = document.createElement('div');
         Object.assign(content.style, {
-            backgroundColor: 'white', width: '95%', maxWidth: '1000px', maxHeight: '85vh',
+            backgroundColor: 'white', width: '95%', maxWidth: '1200px', maxHeight: '85vh',
             overflow: 'auto', borderRadius: '10px', padding: '20px', position: 'relative'
         });
 
@@ -330,33 +332,35 @@
             csvBtn.style.borderRadius = '4px';
             csvBtn.style.cursor = 'pointer';
             csvBtn.onclick = () => {
-                const csv = [
-                    ['模型名称', 'Code', '免费额度', '倒计时显示', '到期时间',
-                     ...(userSettings.showModelType ? ['模型类型'] : []),
-                     ...(userSettings.showContextLength ? ['上下文长度'] : []),
-                     ...(userSettings.showPrice ? ['价格'] : []),
-                     ...(userSettings.showProtocol ? ['模型协议'] : []),
-                     ...(userSettings.showLimit ? ['限流'] : []),
-                     ...(userSettings.showDescription ? ['描述'] : []),
-                     ...(userSettings.showVendor ? ['供应商'] : []),
-                     ...(userSettings.showUpdateTime ? ['更新时间'] : [])
-                    ].join(','),
-                    ...extractedData.map(d => [
-                        d.name,
-                        d.code,
-                        d.freeQuota,
-                        `剩余 ${d.daysLeft} 天`,
-                        d.expiry,
-                        ...(userSettings.showModelType ? [d.modelType || '—'] : []),
-                        ...(userSettings.showContextLength ? [d.contextLength || '—'] : []),
-                        ...(userSettings.showPrice ? [d.price || '—'] : []),
-                        ...(userSettings.showProtocol ? [d.protocol || '—'] : []),
-                        ...(userSettings.showLimit ? [d.limit || '—'] : []),
-                        ...(userSettings.showDescription ? [d.description || '—'] : []),
-                        ...(userSettings.showVendor ? [d.vendor || '—'] : []),
-                        ...(userSettings.showUpdateTime ? [d.updateTime || '—'] : [])
-                    ].map(s => `"${String(s).replace(/"/g, '""')}"`).join(','))
-                ].join('\n');
+                const headers = [
+                    '模型名称', 'Code', '免费额度', '倒计时显示', '到期时间',
+                    ...(userSettings.showModelType ? ['模型类型'] : []),
+                    ...(userSettings.showContextLength ? ['上下文长度'] : []),
+                    ...(userSettings.showPrice ? ['价格'] : []),
+                    ...(userSettings.showProtocol ? ['模型协议'] : []),
+                    ...(userSettings.showLimit ? ['限流'] : []),
+                    ...(userSettings.showDescription ? ['描述'] : []),
+                    ...(userSettings.showVendor ? ['供应商'] : []),
+                    ...(userSettings.showUpdateTime ? ['更新时间'] : [])
+                ];
+
+                const rows = extractedData.map(d => [
+                    d.name,
+                    d.code,
+                    d.freeQuota,
+                    `剩余 ${d.daysLeft} 天`,
+                    d.expiry,
+                    ...(userSettings.showModelType ? [d.modelType || '—'] : []),
+                    ...(userSettings.showContextLength ? [d.contextLength || '—'] : []),
+                    ...(userSettings.showPrice ? [d.price || '—'] : []),
+                    ...(userSettings.showProtocol ? [d.protocol || '—'] : []),
+                    ...(userSettings.showLimit ? [d.limit || '—'] : []),
+                    ...(userSettings.showDescription ? [d.description || '—'] : []),
+                    ...(userSettings.showVendor ? [d.vendor || '—'] : []),
+                    ...(userSettings.showUpdateTime ? [d.updateTime || '—'] : [])
+                ].map(s => `"${String(s).replace(/"/g, '""')}"`).join(','));
+
+                const csv = [headers.join(','), ...rows].join('\n');
                 navigator.clipboard.writeText(csv).then(() => {
                     csvBtn.textContent = '✅ 已复制！';
                     setTimeout(() => csvBtn.textContent = '📋 复制为 CSV', 2000);
