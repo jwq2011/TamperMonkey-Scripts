@@ -2,8 +2,8 @@
 // @name         阿里云百炼模型到期时间提取器
 // @name:en      Bailian Model Expiry Extractor
 // @name:zh      阿里云百炼模型到期时间提取器
-// @namespace    https://github.com/jwq2011/
-// @version      1.4.3
+// @namespace    https://greasyfork.org/zh-CN/scripts/543956-%E9%98%BF%E9%87%8C%E4%BA%91%E7%99%BE%E7%82%BC%E6%A8%A1%E5%9E%8B%E5%88%B0%E6%9C%9F%E6%97%B6%E9%97%B4%E6%8F%90%E5%8F%96%E5%99%A8
+// @version      1.5.0
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -45,7 +45,7 @@
         try {
             const saved = localStorage.getItem('bailian_user_settings');
             if (saved) {
-                userSettings = { ...userSettings, ...JSON.parse(saved) };
+                Object.assign(userSettings, JSON.parse(saved));
             }
         } catch (e) {
             console.error('[Bailian Settings] 加载用户设置失败:', e);
@@ -67,34 +67,44 @@
         });
         button.textContent = '📊 提取模型信息';
 
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             button.disabled = true;
             button.textContent = '🔍 提取中...';
 
-            let needWait = false;
+            try {
+                // 等待页面完全加载
+                await waitForPageLoad();
 
-            // 自动切换视图
-            if (switchToListView()) {
-                needWait = true;
-            }
+                // 自动切换视图
+                let needWait = false;
+                if (await switchToListView()) {
+                    needWait = true;
+                }
 
-            // 自动展开折叠区域
-            if (autoExpandFoldedRows()) {
-                needWait = true;
-            }
+                // 自动展开折叠区域
+                if (await autoExpandFoldedRows()) {
+                    needWait = true;
+                }
 
-            // 等待 DOM 更新
-            setTimeout(() => {
+                // 等待 DOM 更新
+                if (needWait) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+
                 const data = extractAllModels();
                 if (data.length === 0) {
-                    alert('❌ 未找到任何模型信息，请确认已打开【模型市场】页面并完全加载。');
+                    alert('❌ 未找到任何模型信息，请确认已打开【模型广场】页面并完全加载。');
                 } else {
                     extractedData = data;
                     showResultsModal();
                 }
+            } catch (error) {
+                console.error('执行过程中发生错误:', error);
+                alert('❌ 执行过程中发生错误，请刷新页面后重试。');
+            } finally {
                 button.disabled = false;
                 button.textContent = '📊 提取模型信息';
-            }, needWait ? 1200 : 500);
+            }
         });
 
         document.body.appendChild(button);
@@ -104,40 +114,207 @@
         log('✅ 按钮已创建');
     }
 
+    // 等待页面加载完成
+    function waitForPageLoad() {
+        return new Promise((resolve) => {
+            const maxWaitTime = 10000;
+            const startTime = Date.now();
+
+            function checkLoadStatus() {
+                if (document.readyState === 'complete' ||
+                    (document.querySelector('.efm_ant-table') &&
+                     document.querySelector('.model-name__xEkXf'))) {
+                    resolve();
+                    return;
+                }
+
+                if (Date.now() - startTime > maxWaitTime) {
+                    resolve();
+                    return;
+                }
+
+                setTimeout(checkLoadStatus, 500);
+            }
+
+            checkLoadStatus();
+        });
+    }
+
     // 自动切换到列表视图（精准判断）
-    function switchToListView() {
-        // 判断是否已经是列表视图
-        const isListView = document.querySelector('.bl-icon-list-line.active__VRFfX');
-        if (isListView) {
+    async function switchToListView() {
+        log('🔍 正在尝试切换到列表视图...');
+
+        // 先检查当前视图状态
+        const currentViewIcon = document.querySelector('.bl-icon-list-line.active__VRFfX');
+        if (currentViewIcon) {
             log('✅ 当前已是列表视图');
             return false;
         }
 
-        // 否则，点击列表图标切换
-        const listViewIcon = document.querySelector('.bl-icon-list-line');
-        const button = listViewIcon?.closest('button');
+        // 等待一段时间确保DOM完全渲染
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        if (button && button.offsetWidth > 0 && button.offsetHeight > 0) {
-            button.click();
-            log('✅ 已切换到列表视图');
-            return true;
+        // 尝试多种方式寻找列表视图按钮
+        let clicked = false;
+
+        // 方式1：查找所有列表图标
+        const listViewIcons = document.querySelectorAll('.bl-icon-list-line');
+        log(`找到 ${listViewIcons.length} 个列表视图图标`);
+
+        for (let i = 0; i < listViewIcons.length; i++) {
+            const icon = listViewIcons[i];
+            const button = icon.closest('button');
+
+            if (button) {
+                // 检查按钮是否存在且可见
+                if (button.offsetWidth > 0 && button.offsetHeight > 0) {
+                    // 检查是否已经有active类
+                    if (!button.classList.contains('active__VRFfX')) {
+                        log(`尝试点击第 ${i+1} 个列表视图按钮`);
+                        try {
+                            button.click();
+                            log('✅ 已点击切换到列表视图');
+                            clicked = true;
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // 等待动画
+                            break;
+                        } catch (error) {
+                            log(`点击按钮 ${i+1} 失败:`, error);
+                        }
+                    } else {
+                        log(`按钮 ${i+1} 已经激活`);
+                        clicked = false;
+                    }
+                } else {
+                    log(`按钮 ${i+1} 不可见`);
+                }
+            } else {
+                log(`按钮 ${i+1} 不存在或无法获取父元素`);
+            }
         }
 
-        log('⚠️ 未找到“切换到列表视图”按钮');
-        return false;
+        // 方式2：如果没找到，尝试查找包含特定文本的按钮
+        if (!clicked) {
+            log('尝试通过文本查找列表视图按钮...');
+            const buttons = document.querySelectorAll('button');
+            for (let i = 0; i < buttons.length; i++) {
+                const button = buttons[i];
+                if (button.offsetWidth > 0 && button.offsetHeight > 0) {
+                    const text = button.textContent || button.innerText || '';
+                    if (text.includes('列表') || text.includes('List')) {
+                        log(`找到包含"列表"的按钮，尝试点击`);
+                        try {
+                            button.click();
+                            log('✅ 已点击包含"列表"的按钮');
+                            clicked = true;
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // 等待动画
+                            break;
+                        } catch (error) {
+                            log(`点击包含"列表"的按钮失败:`, error);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 方式3：尝试强制刷新页面
+        if (!clicked) {
+            log('⚠️ 未找到可点击的列表视图按钮，将尝试刷新页面');
+            // 为了防止页面卡死，我们只记录日志
+        }
+
+        return clicked;
     }
 
     // 自动展开折叠区域
-    function autoExpandFoldedRows() {
-        const expandButtons = [...document.querySelectorAll('button[aria-label="展开"], button[title="展开"]')];
+    async function autoExpandFoldedRows() {
+        log('🔍 正在尝试展开折叠区域...');
+
+        // 等待一段时间确保DOM完全渲染
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         let clicked = false;
+        let expandedCount = 0;
+
+        // 方法1: 查找所有展开/收起按钮
+        const expandButtons = [...document.querySelectorAll('button.efm_ant-table-row-expand-icon')];
+        log(`找到 ${expandButtons.length} 个展开/收起按钮`);
+
         for (const btn of expandButtons) {
+            // 检查按钮是否可见
             if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                btn.click();
-                clicked = true;
-                log('✅ 点击展开按钮');
+                // 检查是否为折叠状态（collapsed）
+                const isCollapsed = btn.classList.contains('efm_ant-table-row-expand-icon-collapsed');
+                const isExpanded = btn.classList.contains('efm_ant-table-row-expand-icon-expanded');
+
+                if (isCollapsed) {
+                    try {
+                        btn.click();
+                        log('✅ 点击展开按钮');
+                        expandedCount++;
+                        clicked = true;
+                        await new Promise(resolve => setTimeout(resolve, 500)); // 等待动画
+                    } catch (error) {
+                        log('点击展开按钮失败:', error);
+                    }
+                } else if (isExpanded) {
+                    log('✅ 按钮已是展开状态');
+                }
             }
         }
+
+        // 方法2: 如果没有找到折叠按钮，尝试查找其他可能的展开按钮
+        if (expandedCount === 0) {
+            const collapseButtons = [...document.querySelectorAll('button[aria-label="展开"], button[title="展开"]')];
+            log(`备用方法：找到 ${collapseButtons.length} 个展开按钮`);
+
+            for (const btn of collapseButtons) {
+                if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                    try {
+                        btn.click();
+                        log('✅ 点击展开按钮（备用方法）');
+                        expandedCount++;
+                        clicked = true;
+                        await new Promise(resolve => setTimeout(resolve, 500)); // 等待动画
+                    } catch (error) {
+                        log('点击备用展开按钮失败:', error);
+                    }
+                }
+            }
+        }
+
+        // 方法3: 如果还是没有找到，尝试查找所有带展开图标的按钮
+        if (expandedCount === 0) {
+            const allExpandButtons = [...document.querySelectorAll('button')];
+            log(`第三种方法：总共找到 ${allExpandButtons.length} 个按钮`);
+
+            for (const btn of allExpandButtons) {
+                if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                    // 检查按钮是否包含展开相关文字
+                    const text = btn.textContent || btn.innerText || '';
+                    const hasExpandText = text.includes('展开') || text.includes('展开') ||
+                                         text.includes('expand') || text.includes('Expand');
+
+                    if (hasExpandText) {
+                        try {
+                            btn.click();
+                            log('✅ 通过文字匹配点击展开按钮');
+                            expandedCount++;
+                            clicked = true;
+                            await new Promise(resolve => setTimeout(resolve, 500)); // 等待动画
+                        } catch (error) {
+                            log('通过文字匹配点击展开按钮失败:', error);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (expandedCount > 0) {
+            log(`✅ 成功展开 ${expandedCount} 个折叠项`);
+        } else {
+            log('⚠️ 未找到可展开的折叠项');
+        }
+
         return clicked;
     }
 
@@ -145,11 +322,37 @@
     function extractAllModels() {
         log('🔍 开始提取模型数据...');
 
-        const rowSelectors = ['tr[data-row-key]', '.ant-table-row', 'tr[role="row"]'];
+        // 等待页面完全加载
+        const maxWaitTime = 5000;
+        const startTime = Date.now();
+
+        // 等待表格出现
+        while (Date.now() - startTime < maxWaitTime) {
+            const table = document.querySelector('.efm_ant-table');
+            if (table) {
+                log('✅ 表格已加载');
+                break;
+            }
+            // 短暂等待
+            const dummy = new Promise(resolve => setTimeout(resolve, 100));
+            dummy.then(() => {});
+        }
+
+        // 查找行元素
+        const rowSelectors = [
+            'tr[data-row-key]',
+            '.ant-table-row',
+            'tr[role="row"]',
+            '.efm_ant-table-row'
+        ];
+
         let rows = [];
         for (const sel of rowSelectors) {
             rows = [...document.querySelectorAll(sel)];
-            if (rows.length > 0) break;
+            if (rows.length > 0) {
+                log(`✅ 找到 ${rows.length} 行数据`);
+                break;
+            }
         }
 
         if (rows.length === 0) {
@@ -299,7 +502,7 @@
                 <thead>
                     <tr style="background:#f5f5f5;">
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">模型名称</th>
-                        <th style="text-align:left;padding:10px;border:1px solid #ddd;">Code</th>
+                        <th style="text-align:left;padding:10px;border:1px solid #ddd;">Code(点击自动复制)</th>
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">免费额度</th>
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">倒计时显示</th>
                         <th style="text-align:left;padding:10px;border:1px solid #ddd;">到期时间</th>
@@ -434,30 +637,30 @@
     }
 
     // 创建设置按钮和弹窗
-function createSettingsPanel() {
-    const settingsBtnId = 'bailian-settings-btn';
-    if (document.getElementById(settingsBtnId)) return;
+    function createSettingsPanel() {
+        const settingsBtnId = 'bailian-settings-btn';
+        if (document.getElementById(settingsBtnId)) return;
 
-    // 设置按钮
-    const settingsBtn = document.createElement('button');
-    settingsBtn.id = settingsBtnId;
-    Object.assign(settingsBtn.style, {
-        position: 'fixed', top: '140px', right: '20px', zIndex: '2147483646',
-        backgroundColor: '#4CAF50', color: 'white', border: 'none',
-        padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
-        fontSize: '16px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        opacity: 0.95, fontFamily: 'Arial, sans-serif'
-    });
-    settingsBtn.textContent = '⚙️ 设置';
-    settingsBtn.title = '点击打开设置面板';
+        // 设置按钮
+        const settingsBtn = document.createElement('button');
+        settingsBtn.id = settingsBtnId;
+        Object.assign(settingsBtn.style, {
+            position: 'fixed', top: '140px', right: '20px', zIndex: '2147483646',
+            backgroundColor: '#4CAF50', color: 'white', border: 'none',
+            padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
+            fontSize: '16px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            opacity: 0.95, fontFamily: 'Arial, sans-serif'
+        });
+        settingsBtn.textContent = '⚙️ 设置';
+        settingsBtn.title = '点击打开设置面板';
 
-    settingsBtn.addEventListener('click', () => {
-        showSettingsModal();
-    });
+        settingsBtn.addEventListener('click', () => {
+            showSettingsModal();
+        });
 
-    document.body.appendChild(settingsBtn);
-    log('✅ 设置按钮已创建');
-}
+        document.body.appendChild(settingsBtn);
+        log('✅ 设置按钮已创建');
+    }
 
     // 显示设置弹窗
     function showSettingsModal() {
