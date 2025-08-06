@@ -3,7 +3,7 @@
 // @name:en      Bailian Model Expiry Extractor
 // @name:zh      阿里云百炼模型到期时间提取器
 // @namespace    https://greasyfork.org/zh-CN/scripts/543956-%E9%98%BF%E9%87%8C%E4%BA%91%E7%99%BE%E7%82%BC%E6%A8%A1%E5%9E%8B%E5%88%B0%E6%9C%9F%E6%97%B6%E9%97%B4%E6%8F%90%E5%8F%96%E5%99%A8
-// @version      1.5.2
+// @version      1.5.3
 // @author       will
 // @description  精准提取模型名称、Code、免费额度（支持百分比/无额度）、倒计时、到期时间，一键复制 Code。
 // @description:en Accurately extract model name, code, quota (%, 0, or N/M), countdown, expiry, and copy code.
@@ -55,6 +55,7 @@
     // 等待页面完全加载
     function waitForPageReady() {
         return new Promise((resolve) => {
+            // 如果页面已经加载完成，直接返回
             if (document.readyState === 'complete') {
                 resolve();
                 return;
@@ -66,18 +67,18 @@
                     clearInterval(checkInterval);
                     resolve();
                 }
-            }, 100);
+            }, 50); // 更快的检查频率
 
             // 超时处理
             setTimeout(() => {
                 clearInterval(checkInterval);
                 resolve();
-            }, 10000);
+            }, 2000);
         });
     }
 
-    // 等待表格出现
-    function waitForTable(maxWaitTime = 15000) {
+    // 等待表格出现 - 优化版本
+    function waitForTable(maxWaitTime = 3000) {
         return new Promise((resolve) => {
             const startTime = Date.now();
 
@@ -95,15 +96,16 @@
                     return;
                 }
 
-                setTimeout(check, 200);
+                // 更小的检查间隔
+                setTimeout(check, 50);
             }
 
             check();
         });
     }
 
-    // 等待特定元素出现
-    function waitForElement(selector, maxWaitTime = 5000) {
+    // 等待特定元素出现 - 优化版本
+    function waitForElement(selector, maxWaitTime = 2000) {
         return new Promise((resolve) => {
             const startTime = Date.now();
 
@@ -119,7 +121,7 @@
                     return;
                 }
 
-                setTimeout(check, 100);
+                setTimeout(check, 50);
             }
 
             check();
@@ -174,19 +176,19 @@
         });
         button.textContent = '📊 提取模型信息';
 
-        // 自动切换到列表视图（精准判断）
+        // 自动切换到列表视图（精准判断）- 优化版本
         async function switchToListView() {
             log('🔍 正在尝试切换到列表视图...');
 
-            // 先检查当前视图状态 - 快速检查
+            // 快速检查当前视图状态
             const currentViewIcon = document.querySelector('.bl-icon-list-line.active__VRFfX');
             if (currentViewIcon) {
                 log('✅ 当前已是列表视图');
                 return false;
             }
 
-            // 等待短暂时间让DOM稳定
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // 使用更高效的等待方式
+            await new Promise(resolve => setTimeout(resolve, 100));
 
             // 查找所有列表视图图标
             const listViewIcons = document.querySelectorAll('.bl-icon-list-line');
@@ -201,7 +203,7 @@
             for (let i = 0; i < listViewIcons.length; i++) {
                 const icon = listViewIcons[i];
 
-                // 直接检查图标本身是否可见（更快的检测方式）
+                // 更快的可见性检测
                 const rect = icon.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0) {
                     log(`找到可见的列表视图图标 ${i+1}`);
@@ -209,12 +211,11 @@
                     // 检查是否已经是激活状态
                     if (!icon.classList.contains('active__VRFfX')) {
                         try {
-                            // 直接点击图标（而不是它的父按钮）
                             log('正在点击列表视图图标...');
                             icon.click();
                             log('✅ 已点击切换到列表视图');
-                            // 等待动画完成 - 缩短等待时间
-                            await new Promise(resolve => setTimeout(resolve, 300));
+                            // 极短等待时间
+                            await new Promise(resolve => setTimeout(resolve, 150));
                             return true;
                         } catch (error) {
                             log(`点击图标 ${i+1} 失败:`, error);
@@ -238,11 +239,11 @@
             button.textContent = '🔍 提取中...';
 
             try {
-                // 等待页面加载 - 缩短时间
-                await new Promise(resolve => setTimeout(resolve, 300));
+                // 等待页面加载 - 更快的等待
+                await waitForPageReady();
 
-                // 等待表格出现
-                const tableResult = await waitForTable(5000); // 缩短超时时间
+                // 等待表格出现 - 更快的超时
+                const tableResult = await waitForTable(2000);
 
                 // 自动切换视图
                 let needWait = false;
@@ -257,7 +258,7 @@
 
                 // 等待 DOM 更新
                 if (needWait) {
-                    await new Promise(resolve => setTimeout(resolve, 300)); // 缩短等待时间
+                    await new Promise(resolve => setTimeout(resolve, 150)); // 极短等待
                 }
 
                 const data = extractAllModels();
@@ -283,12 +284,12 @@
         log('✅ 按钮已创建');
     }
 
-    // 自动展开折叠区域
+    // 自动展开折叠区域 - 优化版本
     async function autoExpandFoldedRows() {
         log('🔍 正在尝试展开折叠区域...');
 
-        // 缩短等待时间
-        await new Promise(resolve => setTimeout(resolve, 200));
+        // 极短等待时间
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         let clicked = false;
         let expandedCount = 0;
@@ -298,7 +299,7 @@
         log(`找到 ${expandButtons.length} 个展开/收起按钮`);
 
         for (const btn of expandButtons) {
-            // 使用更快的可见性检测
+            // 更快的可见性检测
             const rect = btn.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) {
                 // 检查是否为折叠状态
@@ -311,8 +312,8 @@
                         log('✅ 点击展开按钮');
                         expandedCount++;
                         clicked = true;
-                        // 更快的等待
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        // 极短等待
+                        await new Promise(resolve => setTimeout(resolve, 50));
                     } catch (error) {
                         log('点击展开按钮失败:', error);
                     }
@@ -760,17 +761,27 @@
         document.body.appendChild(modal);
     }
 
-    // 初始化
+    // 初始化函数优化
     function init() {
         console.log(LOG_PREFIX, '脚本已注入，版本:', GM_info.script.version);
 
-        // 等待页面加载完成后再创建按钮
+        // 等待DOM准备就绪后创建按钮
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(createFloatingButton, 500);
-            });
+            // 使用更快速的DOM加载检测
+            const checkInterval = setInterval(() => {
+                if (document.readyState === 'interactive' || document.readyState === 'complete') {
+                    clearInterval(checkInterval);
+                    setTimeout(createFloatingButton, 50); // 极短等待
+                }
+            }, 30);
+
+            // 超时处理
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                setTimeout(createFloatingButton, 50);
+            }, 1000);
         } else {
-            setTimeout(createFloatingButton, 500);
+            setTimeout(createFloatingButton, 50);
         }
     }
 
