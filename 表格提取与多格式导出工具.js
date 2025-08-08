@@ -2,8 +2,8 @@
 // @name         表格提取与多格式导出工具（增强版）
 // @name:en      Table Extraction and Multi Format Export Tool (Enhanced Version)
 // @name:zh      表格提取与多格式导出工具（增强版）
-// @namespace    http://tampermonkey.net/
-// @version      1.6.8
+// @namespace    https://greasyfork.org/zh-CN/scripts/542879-%E8%A1%A8%E6%A0%BC%E6%8F%90%E5%8F%96%E4%B8%8E%E5%A4%9A%E6%A0%BC%E5%BC%8F%E5%AF%BC%E5%87%BA%E5%B7%A5%E5%85%B7-%E5%A2%9E%E5%BC%BA%E7%89%88
+// @version      1.6.9
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
 // @description:en  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names.
 // @author       Will

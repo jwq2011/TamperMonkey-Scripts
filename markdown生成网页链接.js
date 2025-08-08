@@ -2,8 +2,8 @@
 // @name         markdown生成网页链接（右键触发）
 // @name:en      Generate webpage links through markdown (triggered by right-click)
 // @name:zh      markdown生成网页链接（右键触发）
-// @namespace    http://tampermonkey.net/
-// @version      0.1.3
+// @namespace    https://greasyfork.org/zh-CN/scripts/542890-markdown%E7%94%9F%E6%88%90%E7%BD%91%E9%A1%B5%E9%93%BE%E6%8E%A5-%E5%8F%B3%E9%94%AE%E8%A7%A6%E5%8F%91
+// @version      0.1.4
 // @description  右键点击时生成当前页面的Markdown链接并复制到剪贴板
 // @description:en  Generate Markdown link for the current page when right-click and copy it to the clipboard
 // @author       Will
