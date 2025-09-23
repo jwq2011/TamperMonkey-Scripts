@@ -3,19 +3,21 @@
 // @name:en      Table Extraction and Multi Format Export Tool (Enhanced Version)
 // @name:zh      表格提取与多格式导出工具（增强版）
 // @namespace    https://greasyfork.org/zh-CN/scripts/542879-%E8%A1%A8%E6%A0%BC%E6%8F%90%E5%8F%96%E4%B8%8E%E5%A4%9A%E6%A0%BC%E5%BC%8F%E5%AF%BC%E5%87%BA%E5%B7%A5%E5%85%B7-%E5%A2%9E%E5%BC%BA%E7%89%88
-// @version      1.6.9
-// @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。
-// @description:en  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names.
+// @version      1.7.0
+// @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。新增图片表格识别功能。
+// @description:en  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names. Added image table recognition feature.
 // @author       Will
 // @match        *://*/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
 // @grant        GM_registerMenuCommand
+// @grant        GM_xmlhttpRequest
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
+// @require      https://cdn.jsdelivr.net/npm/hotkeys-js@3.10.1/dist/hotkeys.min.js
 // @license      MIT
 // @homepage     https://github.com/jwq2011/TamperMonkey-Scripts
 // @supportURL   https://github.com/jwq2011/TamperMonkey-Scripts/issues
@@ -27,6 +29,9 @@
     // 初始化默认设置
     const defaultSettings = {
         showGlobalButton: false, // 默认不显示全局按钮
+        aiApiUrl: '', // 百炼平台 API 地址
+        aiApiKey: '', // API 密钥
+        aiModelName: '' // 模型名称
     };
 
     // 获取用户设置（如果不存在，则使用默认值）
@@ -68,6 +73,20 @@
                 existingButton.remove();
                 console.log("移除了全局按钮");
             }
+        }
+    });
+
+    GM_registerMenuCommand("设置 - AI API 配置", () => {
+        const apiUrl = prompt("请输入百炼平台 API 地址：", settings.aiApiUrl);
+        const apiKey = prompt("请输入 API 密钥：", settings.aiApiKey);
+        const modelName = prompt("请输入模型名称：", settings.aiModelName);
+
+        if (apiUrl !== null && apiKey !== null && modelName !== null) {
+            settings.aiApiUrl = apiUrl;
+            settings.aiApiKey = apiKey;
+            settings.aiModelName = modelName;
+            saveSettings();
+            alert("AI API 配置已保存！");
         }
     });
 
@@ -510,12 +529,33 @@
             content = data.map((row) => row.join("\t")).join("\n"); // 原格式（Tab 分隔）
         }
 
-        navigator.clipboard.writeText(content).then(() => {
-            alert("内容已复制到剪贴板！");
-        }).catch((error) => {
-            console.error("复制失败：", error);
-            alert("复制失败，请检查控制台！");
-        });
+        // 尝试使用 navigator.clipboard.writeText
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(content).then(() => {
+                alert("内容已复制到剪贴板！");
+            }).catch((error) => {
+                console.error("复制失败：", error);
+                alert("复制失败，请检查控制台！");
+            });
+        } else {
+            // 降级使用 document.execCommand('copy')
+            const textArea = document.createElement("textarea");
+            textArea.value = content;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert("内容已复制到剪贴板！");
+                } else {
+                    alert("复制失败！");
+                }
+            } catch (err) {
+                console.error('复制失败：', err);
+                alert("复制失败，请检查控制台！");
+            }
+            document.body.removeChild(textArea);
+        }
     };
 
     // 保存文件
@@ -664,6 +704,173 @@
         });
     };
 
+    // 图片表格识别功能
+    const detectImages = () => {
+        console.log("检测页面中的图片...");
+        const images = Array.from(document.querySelectorAll("img")).filter((img) => {
+            const rect = img.getBoundingClientRect();
+            return rect.width > 50 && rect.height > 50; // 过滤小图片
+        });
+
+        if (images.length === 0) {
+            console.warn("未找到符合条件的图片");
+        } else {
+            console.log(`检测到 ${images.length} 个图片`);
+        }
+
+        images.forEach((img) => {
+            createImageExtractButton(img);
+        });
+    };
+
+    // 创建图片提取按钮
+    const createImageExtractButton = (img) => {
+        const button = document.createElement("div");
+        button.textContent = "提取表格";
+        button.classList.add("table-extract-button");
+
+        // 固定按钮位置
+        const rect = img.getBoundingClientRect();
+        button.style.top = `${rect.top + window.scrollY}px`;
+        button.style.left = `${rect.right + window.scrollX + 10}px`;
+        document.body.appendChild(button);
+
+        let hideTimeout;
+
+        // 鼠标进入图片范围时显示按钮
+        img.addEventListener("mouseenter", () => {
+            clearTimeout(hideTimeout);
+            button.style.display = "block";
+            console.log("显示图片提取按钮");
+        });
+
+        // 鼠标离开图片范围时延迟隐藏按钮
+        img.addEventListener("mouseleave", () => {
+            hideTimeout = setTimeout(() => {
+                button.style.display = "none";
+                console.log("隐藏图片提取按钮");
+            }, 1000);
+        });
+
+        // 添加点击事件
+        button.addEventListener("click", () => {
+            console.log("点击图片提取按钮：触发提取图片表格数据");
+            extractImageTableData(img);
+        });
+    };
+
+
+    // 修改 AI 调用部分
+    // 提取图片表格数据
+    const extractImageTableData = (img) => {
+        if (!settings.aiApiUrl || !settings.aiApiKey || !settings.aiModelName) {
+            alert("请先在 Tampermonkey 设置中配置 AI API 参数！");
+            return;
+        }
+
+        const imageUrl = img.src;
+        console.log("提取图片表格数据：", imageUrl);
+
+        // 发送请求到阿里云百炼平台
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+            headers: {
+                "Authorization": `Bearer ${settings.aiApiKey}`,
+                "Content-Type": "application/json"
+            },
+            data: JSON.stringify({
+                model: settings.aiModelName,
+                input: {
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                {
+                                    image: imageUrl
+                                },
+                                {
+                                    text: "请识别图片中的表格，以标准的二维数组格式输出，不要添加任何额外说明。"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                parameters: {
+                    structured_output: {
+                        format: "table"
+                    }
+                }
+            }),
+            onload: function(response) {
+                try {
+                    if (!response.responseText) {
+                        throw new Error("空响应");
+                    }
+                    
+                    const result = JSON.parse(response.responseText);
+                    if (result.output && result.output.choices && result.output.choices[0] && result.output.choices[0].message) {
+                        // 获取返回的文本内容
+                        let tableContent = result.output.choices[0].message.content;
+                        
+                        // 如果是数组格式，取第一个元素的text
+                        if (Array.isArray(tableContent)) {
+                            tableContent = tableContent[0]?.text || tableContent[0] || "";
+                        }
+                        
+                        // 尝试解析为表格数据
+                        let tableData;
+                        try {
+                            // 尝试解析为 JSON 数组
+                            if (typeof tableContent === 'string' && (tableContent.trim().startsWith('[') || tableContent.trim().startsWith('{'))) {
+                                tableData = JSON.parse(tableContent);
+                            } else if (typeof tableContent === 'string') {
+                                // 处理 Markdown 表格格式
+                                const lines = tableContent.trim().split('\n').filter(line => line.trim() !== '' && !line.trim().startsWith('#'));
+                                if (lines.length > 0) {
+                                    tableData = lines.map(line => {
+                                        // 处理 Markdown 表格行，移除首尾的 |
+                                        return line.replace(/^\s*\||\|\s*$/g, '').split('|').map(cell => cell.trim());
+                                    });
+                                } else {
+                                    // 作为单行数据处理
+                                    tableData = [[tableContent]];
+                                }
+                            } else {
+                                tableData = tableContent;
+                            }
+                        } catch (parseError) {
+                            // 如果解析失败，将整个内容作为单行数据
+                            tableData = [[typeof tableContent === 'string' ? tableContent : JSON.stringify(tableContent)]];
+                        }
+                        
+                        if (tableData) {
+                            showExportMenu(tableData, "image_table", null);
+                        } else {
+                            alert("AI 识别失败，无法解析返回的表格数据！");
+                            console.error("AI 识别失败：", result);
+                        }
+                    } else {
+                        alert("AI 识别失败，请检查返回数据！");
+                        console.error("AI 识别失败：", result);
+                    }
+                } catch (error) {
+                    console.error("解析 AI 返回数据失败：", error);
+                    console.error("响应内容：", response.responseText);
+                    alert("解析 AI 返回数据失败，请检查控制台！");
+                }
+            },
+            onerror: function(error) {
+                console.error("AI 请求失败：", error);
+                alert("AI 请求失败，请检查网络或 API 配置！");
+            },
+            ontimeout: function() {
+                console.error("AI 请求超时");
+                alert("AI 请求超时，请稍后重试！");
+            }
+        });
+    };
+
     // 页面加载完成后执行
     window.addEventListener("load", () => {
         console.log("页面加载完成，初始化脚本");
@@ -678,6 +885,9 @@
 
         // 检测表格并添加提取按钮
         detectTables();
+
+        // 检测图片并添加提取按钮
+        detectImages();
     });
 
     // 快捷键支持
