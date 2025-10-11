@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Jira 全屏助手设置</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; }
+        h2 { color: #0052cc; }
+        label { display: block; margin: 10px 0 5px; }
+        input, button { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        .tip { color: #666; font-size: 0.9em; margin: 10px 0; }
+        .status { margin: 20px 0; padding: 10px; background: #e6f7ff; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h2>Jira 全屏助手设置</h2>
+
+    <div class="status" id="status">正在加载配置...</div>
+
+    <label for="domains">✅ 启用的 Jira 域名（每行一个，支持端口）：</label>
+    <textarea id="domains" rows="5" placeholder="例如：&#10;jira-sh.xxxxauto.com:8080&#10;yourcompany.atlassian.net"></textarea>
+    <div class="tip">请填写完整域名+端口，如：jira.example.com:8080</div>
+
+    <label for="shortcut">⌨️ 全屏切换快捷键（选填）：</label>
+    <input type="text" id="shortcut" placeholder="例如：Alt+Shift+F（留空则禁用）" readonly>
+    <button id="setShortcut">点此设置快捷键</button>
+    <div class="tip">设置后可在任意页面按快捷键触发全屏切换</div>
+
+    <button id="save">💾 保存配置</button>
+
+    <script src="options.js"></script>
+</body>
+</html>
