@@ -14,7 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @connect      dashscope.aliyuncs.com
-// @require      https://cdn.jsdelivr.net/npm/marked/marked.min.js
+// @require      https://update.greasyfork.org/scripts/506699/marked.js
 // @compatible   tampermonkey
 // @compatible   violentmonkey
 // @compatible   greasemonkey
