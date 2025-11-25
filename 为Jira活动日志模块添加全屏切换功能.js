@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Activity Module Fullscreen Toggle with AI Analysis
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.3
 // @description  Add fullscreen toggle and AI-powered analysis for Jira activity log module.
 // @description  为 Jira 活动日志模块添加全屏切换和 AI 分析功能。
 // @author       Will
@@ -14,11 +14,14 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @connect      dashscope.aliyuncs.com
-// @require      https://update.greasyfork.org/scripts/506699/marked.js
+// @connect      jira-sh.xxxxauto.com
+// @require      https://cdn.jsdelivr.net/npm/marked/marked.min.js
 // @compatible   tampermonkey
 // @compatible   violentmonkey
 // @compatible   greasemonkey
 // @run-at       document-idle
+// @downloadURL https://update.greasyfork.org/scripts/552113/Jira%20Activity%20Module%20Fullscreen%20Toggle%20with%20AI%20Analysis.user.js
+// @updateURL https://update.greasyfork.org/scripts/552113/Jira%20Activity%20Module%20Fullscreen%20Toggle%20with%20AI%20Analysis.meta.js
 // ==/UserScript==
 
 (function () {
@@ -28,8 +31,40 @@
     window.activityFullscreenScriptLoaded = true;
 
     const DEFAULT_MODELS = ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen-flash-2025-07-28', 'qwen-flash', 'qwen-plus-2025-07-14', 'qwen3-30b-a3b-instruct-2507'];
+    const PROMPTS = [
+        {
+            id: 'project-manager',
+            name: '项目经理分析',
+            content: `你是一名资深项目经理兼技术分析师，请仔细阅读以下 JIRA 活动日志内容，分析并总结以下几点：
+
+1. **关键讨论点**：有哪些重要的讨论、意见分歧或建议？
+2. **变更记录**：涉及哪些字段修改、状态流转或责任人调整？
+3. **风险与问题**：是否存在延期风险、技术难点、资源瓶颈？
+4. **结论与行动项**：最终达成什么共识？谁负责下一步？
+
+日志内容如下：
+
+{content}`
+        },
+        {
+            id: 'jira-expert',
+            name: 'JIRA专家分析',
+            content: `作为JIRA系统分析专家，请执行以下结构化步骤分析当前网页：
+ 1. **提取关键内容**：从HTML或截图中识别核心元素——问题ID（格式：PROJECT-XXX）、摘要标题、状态（如“进行中”）、优先级标签、分配负责人。若存在评论区，列出最新3条评论的发送者和时间戳。
+ 2. **解析活动日志**：扫描“Activity”区域，提取过去24小时内的日志条目（操作类型：创建/更新/解决；操作者；时间）。按时间倒序汇总，重点标注状态变更（如“从‘待办’转为‘进行中’”）。
+ 3. **生成总结**：用非技术语言简述当前状态（例如：“问题处于解决阶段，最近被John Doe更新，包含2条新评论”），并指出潜在风险（如“超过24小时未更新，可能阻塞进度”）。
+ 4. **输出价值建议**：提供3项可操作洞察——① 优先级建议（如“高优先级问题需今日处理”）；② 后续步骤（如“联系分配者确认解决时间”）；③ 业务价值点（如“此问题影响sprint目标，延迟将导致交付延期”）。
+
+ 输出格式：严格使用Markdown分段，标题为【当前摘要】【活动日志摘要】【行动建议】，避免技术术语，确保5分钟内可读完。
+
+ 日志内容如下：
+
+{content}`
+        }
+    ];
     const DASHSCOPE_API_KEY = GM_getValue('DASHSCOPE_API_KEY', '');
     const MODEL_NAME = GM_getValue('MODEL_NAME', 'qwen-plus');
+    const PROMPT_ID = GM_getValue('PROMPT_ID', 'jira-expert');
 
     GM_addStyle(`
         .activity-fullscreen-btn, .activity-analyze-btn, .activity-config-btn {
@@ -156,6 +191,23 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        
+        /* Loading indicator for AI analysis */
+        .ai-analysis-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     `);
 
     function createButtons() {
@@ -254,26 +306,22 @@
             return;
         }
 
-        const contentText = contentDiv.innerText.trim();
-        if (!contentText) {
+        showResultModal("正在收集页面内容，请稍候...");
+        
+        // 获取完整的活动日志内容
+        const fullContent = await getFullActivityContent();
+        
+        if (!fullContent.trim()) {
             showResultModal("内容为空");
             return;
         }
 
         showResultModal("正在分析中，请稍候...");
 
-        const prompt = `
-你是一名资深项目经理兼技术分析师，请仔细阅读以下 JIRA 活动日志内容，分析并总结以下几点：
-
-1. **关键讨论点**：有哪些重要的讨论、意见分歧或建议？
-2. **变更记录**：涉及哪些字段修改、状态流转或责任人调整？
-3. **风险与问题**：是否存在延期风险、技术难点、资源瓶颈？
-4. **结论与行动项**：最终达成什么共识？谁负责下一步？
-
-日志内容如下：
-
-${contentText}
-`;
+        // 获取当前选中的prompt
+        const currentPromptId = GM_getValue('PROMPT_ID', 'jira-expert');
+        const currentPrompt = PROMPTS.find(p => p.id === currentPromptId) || PROMPTS[1]; // 默认使用JIRA专家分析
+        const promptContent = currentPrompt.content.replace('{content}', fullContent);
 
         try {
             const response = await new Promise((resolve, reject) => {
@@ -288,10 +336,17 @@ ${contentText}
                         model: GM_getValue('MODEL_NAME'),
                         messages: [
                             { role: 'system', content: '你是一位经验丰富的项目管理与技术分析专家。' },
-                            { role: 'user', content: prompt }
+                            { role: 'user', content: promptContent }
                         ]
                     }),
-                    onload: res => resolve(JSON.parse(res.responseText)),
+                    onload: res => {
+                        try {
+                            const result = JSON.parse(res.responseText);
+                            resolve(result);
+                        } catch (e) {
+                            reject(e);
+                        }
+                    },
                     onerror: reject
                 });
             });
@@ -302,6 +357,23 @@ ${contentText}
             console.error(err);
             showResultModal("分析失败，请检查网络或 API 配置");
         }
+    }
+
+    /**
+     * 获取完整的活动日志内容，包括所有标签页
+     */
+    async function getFullActivityContent() {
+        const modContent = document.querySelector('.mod-content');
+        if (!modContent) return '';
+
+        // 直接获取当前页面上所有内容，而不需要额外的AJAX请求
+        // 移除脚本标签和其他不必要的元素
+        const clonedContent = modContent.cloneNode(true);
+        const scripts = clonedContent.querySelectorAll('script');
+        scripts.forEach(script => script.remove());
+        
+        // 获取纯文本内容
+        return clonedContent.innerText;
     }
 
     function showResultModal(content) {
@@ -335,7 +407,13 @@ ${contentText}
 
         const contentBox = document.createElement('div');
         contentBox.id = 'ai-result-content';
-        contentBox.innerHTML = marked.parse(content);
+        
+        // 安全地解析内容，如果marked不可用则使用普通文本
+        try {
+            contentBox.innerHTML = marked.parse(content);
+        } catch (e) {
+            contentBox.innerHTML = '<pre>' + content.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+        }
 
         const actions = document.createElement('div');
         actions.id = 'ai-result-actions';
@@ -345,6 +423,19 @@ ${contentText}
         copyBtn.onclick = () => {
             navigator.clipboard.writeText(content).then(() => {
                 alert("已复制到剪贴板");
+            }).catch(err => {
+                // 降级处理
+                const textArea = document.createElement('textarea');
+                textArea.value = content;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert("已复制到剪贴板");
+                } catch (err) {
+                    alert("复制失败，请手动复制");
+                }
+                document.body.removeChild(textArea);
             });
         };
 
@@ -364,7 +455,7 @@ ${contentText}
                     </style>
                 </head>
                 <body>
-                    ${marked.parse(content)}
+                    ${contentBox.innerHTML}
                 </body>
                 </html>
             `);
@@ -425,7 +516,7 @@ ${contentText}
             const option = document.createElement('option');
             option.value = model;
             option.textContent = model;
-            if (model === GM_getValue('MODEL_NAME')) option.selected = true;
+            if (model === GM_getValue('MODEL_NAME', 'qwen-plus')) option.selected = true;
             modelSelect.appendChild(option);
         });
         const customOption = document.createElement('option');
@@ -441,12 +532,25 @@ ${contentText}
             customInput.style.display = modelSelect.value === 'custom' ? 'block' : 'none';
         });
 
+        const promptLabel = document.createElement('label');
+        promptLabel.textContent = '分析模板';
+        const promptSelect = document.createElement('select');
+        PROMPTS.forEach(prompt => {
+            const option = document.createElement('option');
+            option.value = prompt.id;
+            option.textContent = prompt.name;
+            if (prompt.id === GM_getValue('PROMPT_ID', 'jira-expert')) option.selected = true;
+            promptSelect.appendChild(option);
+        });
+        promptLabel.appendChild(promptSelect);
+
         const saveBtn = document.createElement('button');
         saveBtn.textContent = '保存配置';
         saveBtn.onclick = () => {
             GM_setValue('DASHSCOPE_API_KEY', keyInput.value);
             const selectedModel = modelSelect.value === 'custom' ? customInput.value : modelSelect.value;
             GM_setValue('MODEL_NAME', selectedModel);
+            GM_setValue('PROMPT_ID', promptSelect.value);
             alert('配置已保存');
             document.body.removeChild(overlay);
             document.body.removeChild(modal);
@@ -456,6 +560,8 @@ ${contentText}
         modal.appendChild(modelLabel);
         modal.appendChild(modelSelect);
         modal.appendChild(customInput);
+        modal.appendChild(promptLabel);
+        modal.appendChild(promptSelect);
         modal.appendChild(saveBtn);
         document.body.appendChild(modal);
     }
