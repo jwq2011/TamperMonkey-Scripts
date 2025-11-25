@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Activity Module Fullscreen Toggle with AI Analysis
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.0.5
 // @description  Add fullscreen toggle and AI-powered analysis for Jira activity log module.
 // @description  为 Jira 活动日志模块添加全屏切换和 AI 分析功能。
 // @author       Will
@@ -29,6 +29,15 @@
 
     if (window.activityFullscreenScriptLoaded) return;
     window.activityFullscreenScriptLoaded = true;
+
+    const DEFAULT_TEMPLATE = `问题时间：
+分析科室：BSP
+分析日志文件名：
+分析过程：问题时间点为XXXX，聚焦问题时间点展开因果分析。
+分析结论：正常修复；正常扭转；压测复现；
+修复计划：XXX完成代码合入、XXX完成代码提交。
+扭转科室：IVI
+扭转目的：需要XXXX组检查某某时间段有无异常。`;
 
     const DEFAULT_MODELS = ['qwen-plus', 'qwen-max', 'qwen-turbo', 'qwen-flash-2025-07-28', 'qwen-flash', 'qwen-plus-2025-07-14', 'qwen3-30b-a3b-instruct-2507'];
     const PROMPTS = [
@@ -65,9 +74,10 @@
     const DASHSCOPE_API_KEY = GM_getValue('DASHSCOPE_API_KEY', '');
     const MODEL_NAME = GM_getValue('MODEL_NAME', 'qwen-plus');
     const PROMPT_ID = GM_getValue('PROMPT_ID', 'jira-expert');
+    const TEMPLATE_CONTENT = GM_getValue('TEMPLATE_CONTENT', DEFAULT_TEMPLATE);
 
     GM_addStyle(`
-        .activity-fullscreen-btn, .activity-analyze-btn, .activity-config-btn {
+        .activity-fullscreen-btn, .activity-analyze-btn, .activity-config-btn, .activity-template-btn {
             margin-left: 10px;
             padding: 6px 12px;
             border: none;
@@ -81,6 +91,7 @@
         .activity-fullscreen-btn.exit { background-color: #d04437; }
         .activity-analyze-btn { background-color: #008000; }
         .activity-config-btn { background-color: #ff9900; }
+        .activity-template-btn { background-color: #666666; }
 
         #exit-fullscreen-btn {
             position: fixed;
@@ -208,6 +219,82 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Template Editor Modal */
+        #template-editor-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10001;
+            width: 600px;
+            max-width: 90%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #template-editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        #template-editor-title {
+            margin: 0;
+            font-size: 18px;
+        }
+        
+        #template-editor-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        #template-textarea {
+            flex-grow: 1;
+            min-height: 300px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        
+        #template-editor-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        #template-save-btn, #template-reset-btn, #template-copy-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #template-save-btn {
+            background-color: #0052cc;
+            color: white;
+        }
+        
+        #template-reset-btn {
+            background-color: #ff9900;
+            color: white;
+        }
+        
+        #template-copy-btn {
+            background-color: #008000;
+            color: white;
+        }
     `);
 
     function createButtons() {
@@ -217,7 +304,7 @@
         const heading = activityModule.querySelector('#activitymodule_heading');
         if (!heading) return;
 
-        [...heading.querySelectorAll('.activity-fullscreen-btn, .activity-analyze-btn, .activity-config-btn')].forEach(btn => btn.remove());
+        [...heading.querySelectorAll('.activity-fullscreen-btn, .activity-analyze-btn, .activity-config-btn, .activity-template-btn')].forEach(btn => btn.remove());
 
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'activity-fullscreen-btn';
@@ -230,6 +317,12 @@
         analyzeBtn.textContent = 'AI 分析';
         analyzeBtn.addEventListener('click', analyzeContent);
         heading.appendChild(analyzeBtn);
+
+        const templateBtn = document.createElement('button');
+        templateBtn.className = 'activity-template-btn';
+        templateBtn.textContent = '模板';
+        templateBtn.addEventListener('click', openTemplateEditor);
+        heading.appendChild(templateBtn);
 
         const configBtn = document.createElement('button');
         configBtn.className = 'activity-config-btn';
@@ -563,6 +656,102 @@
         modal.appendChild(promptLabel);
         modal.appendChild(promptSelect);
         modal.appendChild(saveBtn);
+        document.body.appendChild(modal);
+    }
+
+    function openTemplateEditor() {
+        // 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.id = 'overlay';
+        document.body.appendChild(overlay);
+
+        // 创建模态框
+        const modal = document.createElement('div');
+        modal.id = 'template-editor-modal';
+
+        // 创建头部
+        const header = document.createElement('div');
+        header.id = 'template-editor-header';
+
+        const title = document.createElement('h3');
+        title.id = 'template-editor-title';
+        title.textContent = '模板编辑器';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.id = 'template-editor-close';
+        closeBtn.innerHTML = '&times;';
+        closeBtn.onclick = () => {
+            document.body.removeChild(overlay);
+            document.body.removeChild(modal);
+        };
+
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        // 创建文本区域
+        const textarea = document.createElement('textarea');
+        textarea.id = 'template-textarea';
+        textarea.value = GM_getValue('TEMPLATE_CONTENT', DEFAULT_TEMPLATE);
+
+        // 创建操作按钮
+        const actions = document.createElement('div');
+        actions.id = 'template-editor-actions';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.id = 'template-copy-btn';
+        copyBtn.textContent = '复制到剪贴板';
+        copyBtn.onclick = () => {
+            const content = textarea.value;
+            // 直接使用降级处理方法以确保兼容性
+            const textArea = document.createElement('textarea');
+            textArea.value = content;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); // A method for mobile devices
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert('模板已复制到剪贴板');
+                } else {
+                    alert('复制失败，请手动复制');
+                }
+            } catch (err) {
+                alert('复制失败，请手动复制');
+            }
+            document.body.removeChild(textArea);
+        };
+
+        const resetBtn = document.createElement('button');
+        resetBtn.id = 'template-reset-btn';
+        resetBtn.textContent = '重置为默认';
+        resetBtn.onclick = () => {
+            if (confirm('确定要重置为默认模板吗？')) {
+                textarea.value = DEFAULT_TEMPLATE;
+            }
+        };
+
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'template-save-btn';
+        saveBtn.textContent = '保存';
+        saveBtn.onclick = () => {
+            GM_setValue('TEMPLATE_CONTENT', textarea.value);
+            alert('模板已保存');
+            document.body.removeChild(overlay);
+            document.body.removeChild(modal);
+        };
+
+        actions.appendChild(copyBtn);
+        actions.appendChild(resetBtn);
+        actions.appendChild(saveBtn);
+
+        // 组装模态框
+        modal.appendChild(header);
+        modal.appendChild(textarea);
+        modal.appendChild(actions);
+
         document.body.appendChild(modal);
     }
 
