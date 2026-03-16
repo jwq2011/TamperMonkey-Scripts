@@ -3,7 +3,7 @@
 // @name:en      Table Extraction and Multi Format Export Tool (Enhanced Version)
 // @name:zh      表格提取与多格式导出工具（增强版）
 // @namespace    https://greasyfork.org/zh-CN/scripts/542879-%E8%A1%A8%E6%A0%BC%E6%8F%90%E5%8F%96%E4%B8%8E%E5%A4%9A%E6%A0%BC%E5%BC%8F%E5%AF%BC%E5%87%BA%E5%B7%A5%E5%85%B7-%E5%A2%9E%E5%BC%BA%E7%89%88
-// @version      1.7.0
+// @version      1.7.1
 // @description  自动检测网页中的表格，支持多种格式导出和快捷键操作，文件名优先使用表格上方的小标题。新增图片表格识别功能。
 // @description:en  Automatically detect tables in web pages, support multiple format exports and shortcut key operations, and prioritize using subheadings above the table for file names. Added image table recognition feature.
 // @author       Will
@@ -282,6 +282,7 @@
             <button id="preview-data-btn">数据预览</button>
             <button id="copy-original-btn">复制到剪贴板（原格式）</button>
             <button id="copy-markdown-btn">复制到剪贴板（Markdown）</button>
+            <button id="copy-html-btn">复制到剪贴板（HTML（带样式））</button>
             <button id="close-export-menu-btn">关闭</button>
             <div class="status-message" id="status-message"></div>
         `;
@@ -331,6 +332,17 @@
                 console.log("点击复制到剪贴板（Markdown）");
                 copyToClipboard(data, "markdown");
             });
+        }
+
+        // 复制到剪贴板（HTML，带样式）
+        const copyHtmlBtn = document.getElementById("copy-html-btn");
+        if (copyHtmlBtn) {
+            copyHtmlBtn.addEventListener("click", () => {
+                console.log("点击复制到剪贴板（HTML 带样式）");
+                copyHtmlToClipboard(table);
+            });
+        } else {
+                console.warn("未找到复制 HTML 带样式的按钮");
         }
 
         // 关闭按钮事件绑定
@@ -555,6 +567,60 @@
                 alert("复制失败，请检查控制台！");
             }
             document.body.removeChild(textArea);
+        }
+    };
+
+    // 复制 HTML（带样式）到剪贴板
+    const copyHtmlToClipboard = (table) => {
+        try {
+            if (!table || !(table instanceof HTMLElement)) {
+                console.error("无效的 table 元素，无法复制 HTML 带样式");
+                alert("无法复制：表格元素无效！");
+                return;
+            }
+
+            const cloneTable = table.cloneNode(true); // 浅/深克隆都可（保留样式）
+
+            // 为避免复制样式丢失，可内联 style 属性（可选增强）
+            // cloneTable.setAttribute("style", window.getComputedStyle(table).cssText); // 可选，但可能样式太多
+
+            const wrapper = document.createElement("div");
+            wrapper.appendChild(cloneTable);
+            const htmlContent = wrapper.innerHTML;
+
+            // 使用 Clipboard API（自动尝试带格式复制）
+            if (navigator.clipboard && window.isSecureContext) {
+                const blob = new Blob([htmlContent], { type: "text/html" });
+                const data = [new ClipboardItem({ "text/html": blob })];
+                navigator.clipboard.write(data).then(() => {
+                    alert("✅ HTML（带样式）已复制到剪贴板！\n可在 Word / Google Docs / 微信/钉钉等支持富文本的编辑器中黏贴。");
+                }).catch(err => {
+                    console.error("失败原因（ClipboardItem）：", err);
+                    alert("复制失败：浏览器不支持复制带样式 HTML（安全上下文问题）。");
+                });
+            } else {
+                // 兼容方案：插入 textarea + execCommand
+                const textarea = document.createElement("textarea");
+                textarea.value = htmlContent;
+                textarea.style = "position: fixed; left: -9999px;";
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    const success = document.execCommand("copy");
+                    if (success) {
+                        alert("✅ HTML 原始代码已复制到剪贴板（注意：剪贴板中是原始 HTML，非富文本预览）\n⚠️ 请粘贴到支持 HTML 格式的编辑器中使用（如 Word / VSCode / online editor）");
+                    } else {
+                        alert("复制失败！");
+                    }
+                } catch (err) {
+                    console.error("复制失败（execCommand）：", err);
+                    alert("复制失败，请检查控制台！");
+                }
+                document.body.removeChild(textarea);
+            }
+        } catch (error) {
+            console.error("复制 HTML 失败：", error);
+            alert("❌ 复制 HTML 失败，请检查控制台！");
         }
     };
 
@@ -807,17 +873,17 @@
                     if (!response.responseText) {
                         throw new Error("空响应");
                     }
-                    
+
                     const result = JSON.parse(response.responseText);
                     if (result.output && result.output.choices && result.output.choices[0] && result.output.choices[0].message) {
                         // 获取返回的文本内容
                         let tableContent = result.output.choices[0].message.content;
-                        
+
                         // 如果是数组格式，取第一个元素的text
                         if (Array.isArray(tableContent)) {
                             tableContent = tableContent[0]?.text || tableContent[0] || "";
                         }
-                        
+
                         // 尝试解析为表格数据
                         let tableData;
                         try {
@@ -843,7 +909,7 @@
                             // 如果解析失败，将整个内容作为单行数据
                             tableData = [[typeof tableContent === 'string' ? tableContent : JSON.stringify(tableContent)]];
                         }
-                        
+
                         if (tableData) {
                             showExportMenu(tableData, "image_table", null);
                         } else {
